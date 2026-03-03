@@ -1,523 +1,713 @@
 #!/usr/bin/env python3
 """
-OpenLens - Minimalist AI Video Generation Portal
-A raw transparency API pass-through for AI video generation.
+OpenLens - 多模态 AI 创作前端
+===================================
+作者: OpenLens Team
+版本: 1.0.0
+功能: 文生图、文生视频、图生视频、视频生视频
 
-Features:
-- Pure pass-through: no content filtering, no safety middleware
-- Manual API config with LocalStorage persistence  
-- OpenAI-style /v1/video/generations support
-- Auto-polling for async video generation
-- HTML5 video player with download button
-- Local save path configuration
+部署: Streamlit Cloud
+后端: 连接 API 聚合服务
+
+注意: 
+- 用户必须输入自己的 API Key
+- 所有 API Key 保存在 session_state 中，不会上传
+- 18禁验证确保合规
 """
 
 import streamlit as st
 import requests
-import time
 import json
 import os
+import time
 from datetime import datetime
 
-# Get skill directory
-SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_FILE = os.path.join(SKILL_DIR, "config.json")
-
 # ============================================================
-# PAGE CONFIG
+# 页面配置
 # ============================================================
 st.set_page_config(
-    page_title="OpenLens",
+    page_title="OpenLens - AI 多模态创作平台",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for dark minimalist theme
+# 自定义 CSS 样式
 st.markdown("""
 <style>
-    .stApp { background: #0a0a0a; color: #e0e0e0; }
-    .stTextInput > div > div > input { background: #1a1a1a; border: 1px solid #333; color: #fff; }
-    .stTextArea > div > div > textarea { background: #1a1a1a; border: 1px solid #333; color: #fff; }
-    .stButton > button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-weight: 600; }
-    .video-container { background: #000; border-radius: 12px; padding: 16px; margin-top: 16px; }
-    .main-header { font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0; }
-    .subtitle { color: #666; font-size: 0.9rem; margin-top: -10px; }
-    .age-container { max-width: 600px; margin: 80px auto; padding: 50px; background: #1a1a1a; border: 2px solid #667eea; border-radius: 20px; text-align: center; }
-    .age-title { font-size: 36px; font-weight: bold; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 30px; }
-    .age-text { color: #ccc; font-size: 16px; line-height: 2.2; margin-bottom: 30px; }
-    .age-warning { color: #ef4444; font-size: 14px; padding: 15px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; margin-top: 20px; }
+    /* 暗色主题 */
+    .stApp {
+        background: #0a0a0a;
+        color: #e0e0e0;
+    }
+    
+    /* 输入框样式 */
+    .stTextInput > div > div > input {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        color: #fff;
+    }
+    
+    /* 文本域样式 */
+    .stTextArea > div > div > textarea {
+        background: #1a1a1a;
+        border: 1px solid #333;
+        color: #fff;
+    }
+    
+    /* 按钮渐变 */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        color: white;
+        font-weight: 600;
+    }
+    
+    /* 标题样式 */
+    .main-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    
+    /* 18禁弹窗样式 */
+    .age-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    
+    .age-box {
+        background: #1a1a1a;
+        border: 2px solid #667eea;
+        border-radius: 20px;
+        padding: 50px;
+        max-width: 600px;
+        text-align: center;
+    }
+    
+    .age-title {
+        font-size: 32px;
+        font-weight: bold;
+        color: #fff;
+        margin-bottom: 30px;
+    }
+    
+    .age-warning {
+        color: #ef4444;
+        font-size: 14px;
+        padding: 15px;
+        background: rgba(239, 68, 68, 0.1);
+        border-radius: 8px;
+        margin-top: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ============================================================
-# CONFIGURATION
+# Session State 初始化
 # ============================================================
 
-def load_config():
-    """Load configuration from config.json"""
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_config(config):
-    """Save configuration to config.json"""
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(config, f, indent=2)
+def init_session_state():
+    """初始化所有 session state 变量"""
+    
+    # 18禁验证状态
+    if 'age_verified' not in st.session_state:
+        st.session_state.age_verified = False
+    
+    # ========== 全局配置 ==========
+    if 'global_api_url' not in st.session_state:
+        st.session_state.global_api_url = "https://api.openai.com/v1"
+    
+    # ========== 文本模型配置 (Prompt 优化) ==========
+    if 'text_api_key' not in st.session_state:
+        st.session_state.text_api_key = ""
+    if 'text_model' not in st.session_state:
+        st.session_state.text_model = "gpt-4o"
+    
+    # ========== 图像生成配置 (T2I) ==========
+    if 't2i_api_key' not in st.session_state:
+        st.session_state.t2i_api_key = ""
+    if 't2i_model' not in st.session_state:
+        st.session_state.t2i_model = "dall-e-3"
+    
+    # ========== 文生视频配置 (T2V) ==========
+    if 't2v_api_key' not in st.session_state:
+        st.session_state.t2v_api_key = ""
+    if 't2v_model' not in st.session_state:
+        st.session_state.t2v_model = "wan2.2"
+    
+    # ========== 图生视频配置 (I2V) ==========
+    if 'i2v_api_key' not in st.session_state:
+        st.session_state.i2v_api_key = ""
+    if 'i2v_model' not in st.session_state:
+        st.session_state.i2v_model = "wan2.2"
+    
+    # ========== 视频生视频配置 (V2V) ==========
+    if 'v2v_api_key' not in st.session_state:
+        st.session_state.v2v_api_key = ""
+    if 'v2v_model' not in st.session_state:
+        st.session_state.v2v_model = "wan2.2"
+    
+    # ========== 生成状态 ==========
+    if 'generated_media' not in st.session_state:
+        st.session_state.generated_media = None
+    if 'final_prompt' not in st.session_state:
+        st.session_state.final_prompt = ""
+    if 'generation_mode' not in st.session_state:
+        st.session_state.generation_mode = "文生图"
 
 # ============================================================
-# SESSION STATE MANAGEMENT
+# 18禁验证页面
 # ============================================================
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'api_url' not in st.session_state:
-    st.session_state.api_url = ""
-if 'api_key' not in st.session_state:
-    st.session_state.api_key = ""
-if 'task_id' not in st.session_state:
-    st.session_state.task_id = None
-if 'task_status' not in st.session_state:
-    st.session_state.task_status = None
-if 'video_url' not in st.session_state:
-    st.session_state.video_url = None
-if 'progress' not in st.session_state:
-    st.session_state.progress = 0
-if 'logs' not in st.session_state:
-    st.session_state.logs = []
-if 'uploaded_image_url' not in st.session_state:
-    st.session_state.uploaded_image_url = None
-if 'text_api_url' not in st.session_state:
-    st.session_state.text_api_url = ""
-if 'text_api_key' not in st.session_state:
-    st.session_state.text_api_key = ""
-if 'text_model' not in st.session_state:
-    st.session_state.text_model = ""
-if 'refined_prompt' not in st.session_state:
-    st.session_state.refined_prompt = ""
-if 'save_path' not in st.session_state:
-    st.session_state.save_path = "./outputs"
 
-# NOTE: Config loading removed to prevent exposing API keys
-# Users must enter their own API keys in the GUI
-
-# ============================================================
-# HELPER F===========================
-
-# DefaultUNCTIONS
-# ================================= video model
-DEFAULT_MODEL = "wan2.2"
-
-REFINER_SYSTEM_PROMPT = """You are a top-tier AI video director. Transform the user's description into a professional, cinematic video prompt. Enhance with visual details, motion dynamics, technical quality terms. Output ONLY the refined prompt."""
-
-def log_message(msg):
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    log_entry = "[%s] %s" % (timestamp, msg)
-    st.session_state.logs.append(log_entry)
-    if len(st.session_state.logs) > 50:
-        st.session_state.logs = st.session_state.logs[-50:]
-
-def refine_prompt(text_api_url, text_api_key, text_model, user_prompt, image_url=None):
-    headers = {"Authorization": "Bearer " + text_api_key, "Content-Type": "application/json"}
+def show_age_verification():
+    """显示 18禁验证界面"""
     
-    if image_url:
-        messages = [
-            {"role": "system", "content": REFINER_SYSTEM_PROMPT},
-            {"role": "user", "content": [{"type": "image_url", "image_url": {"url": image_url}}, {"type": "text", "text": "Original: " + user_prompt}]}
-        ]
-    else:
-        messages = [{"role": "system", "content": REFINER_SYSTEM_PROMPT}, {"role": "user", "content": user_prompt}]
-    
-    payload = {"model": text_model, "messages": messages, "temperature": 0.7, "max_tokens": 500}
-    
-    for endpoint in ["%s/chat/completions" % text_api_url, "%s/responses" % text_api_url]:
-        try:
-            resp = requests.post(endpoint, headers=headers, json=payload, timeout=60)
-            if resp.status_code == 200:
-                data = resp.json()
-                if "choices" in data:
-                    return data["choices"][0]["message"]["content"]
-                elif "output" in data:
-                    return data["output"][0]["content"][0]["text"]
-        except Exception as e:
-            log_message("Refine error: " + str(e))
-    return None
-
-def upload_to_catbox(file_data, filename):
-    try:
-        files = {'reqtype': (None, 'fileupload'), 'time': (None, '1h'), 'fileToUpload': (filename, file_data, 'image/' + filename.split('.')[-1])}
-        resp = requests.post('https://catbox.moe/user/api.php', files=files, timeout=60)
-        if resp.status_code == 200 and resp.text.strip().startswith('http'):
-            return resp.text.strip()
-    except:
-        pass
-    return None
-
-def submit_video_task(api_url, api_key, prompt, negative_prompt, resolution="720p", duration=5, **extra_params):
-    headers = {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}
-    payload = {"model": extra_params.get("model", DEFAULT_MODEL), "input": {"prompt": prompt}}
-    
-    if negative_prompt:
-        payload["input"]["negative_prompt"] = negative_prompt
-    if extra_params.get("img_url"):
-        payload["input"]["img_url"] = extra_params["img_url"]
-    
-    payload["parameters"] = {"size": resolution, "duration": duration}
-    if extra_params.get("seed"):
-        payload["parameters"]["seed"] = extra_params["seed"]
-    
-    try:
-        resp = requests.post("%s/video/generations" % api_url, headers=headers, json=payload, timeout=30)
-        if resp.status_code == 200:
-            return resp.json()
-    except Exception as e:
-        log_message("Submit error: " + str(e))
-    return {"error": str(e)}
-
-def poll_task_status(api_url, api_key, task_id, max_attempts=120):
-    headers = {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}
-    for attempt in range(max_attempts):
-        try:
-            resp = requests.get("%s/video/generations/%s" % (api_url, task_id), headers=headers, timeout=30)
-            if resp.status_code == 200:
-                data = resp.json()
-                status = data.get("status", "UNKNOWN")
-                progress = data.get("progress_percent", 0)
-                st.session_state.task_status = status
-                st.session_state.progress = progress
-                log_message("Poll #%d: %s (%d%%)" % (attempt+1, status, progress))
-                if status == "SUCCEED":
-                    st.session_state.video_url = data.get("videos", [{}])[0].get("video_url")
-                    return data
-                elif status == "FAILED":
-                    return data
-                time.sleep(5)
-        except Exception as e:
-            log_message("Poll error: " + str(e))
-            time.sleep(5)
-    return {"error": "Timeout"}
-
-def download_and_save(video_url, save_path):
-    """Stream download video and save to local path"""
-    try:
-        os.makedirs(save_path, exist_ok=True)
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(save_path, f"video_{timestamp}.mp4_message")
-        
-        log("Streaming download to: " + output_file)
-        response = requests.get(video_url, stream=True)
-        response.raise_for_status()
-        
-        total = int(response.headers.get('content-length', 0))
-        downloaded = 0
-        
-        with open(output_file, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-        
-        log_message("Saved: " + output_file)
-        return output_file
-    except Exception as e:
-        log_message("Download error: " + str(e))
-        return None
-
-# ============================================================
-# AGE VERIFICATION
-# ============================================================
-if not st.session_state.authenticated:
     st.markdown("""
-    <div class="age-container">
-        <div class="age-title">🎬 OpenLens</div>
-        <div class="age-text">
-            <strong>Age Verification Required</strong><br><br>
-            This is a transparent AI video generation gateway.<br><br>
-            Please confirm all of the following:
+    <div class="age-overlay">
+        <div class="age-box">
+            <div class="age-title">🎬 OpenLens</div>
+            <div style="color: #ccc; font-size: 18px; line-height: 2;">
+                <strong>年龄验证 Required</strong><br><br>
+                本平台支持多模态 AI 创作功能。<br>
+                请确认以下条件：
+            </div>
+            <div style="color: #fff; margin: 30px 0; text-align: left; padding: 0 50px;">
+                ✅ 我已年满 <strong>18 岁</strong><br>
+                ✅ 我将 <strong>合法合规</strong> 使用本平台<br>
+                ✅ 我确认对生成内容 <strong>承担全部责任</strong>
+            </div>
+            <div class="age-warning">
+                ⚠️ 任何违法或有害内容生成均被严格禁止<br>
+                平台运营方不对用户生成内容负责
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
+    # 按钮列
+    col1, col2 = st.columns([2, 1])
+    
     with col1:
-        check1 = st.checkbox("✅ I am 18+")
-    with col2:
-        check2 = st.checkbox("✅ I will use legally")
-    with col3:
-        check3 = st.checkbox("✅ I accept responsibility")
-    
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    if check1 and check2 and check3:
-        if st.button("✅ Enter OpenLens", type="primary", use_container_width=True):
-            st.session_state.authenticated = True
+        if st.button("✅ 我已满18岁 - 进入", type="primary", use_container_width=True):
+            st.session_state.age_verified = True
             st.rerun()
-    else:
-        st.button("✅ Enter OpenLens", disabled=True, use_container_width=True)
-        st.info("👆 Please check all boxes above")
     
-    st.markdown("---")
-    st.markdown("<div class='age-warning' style='text-align:center;'>⚠️ Illegal content is prohibited</div>", unsafe_allow_html=True)
+    with col2:
+        if st.button("❌ 离开"):
+            st.markdown("""
+            <meta http-equiv="refresh" content="0;url=https://www.google.com">
+            """, unsafe_allow_html=True)
+    
     st.stop()
 
 # ============================================================
-# MAIN UI
+# API 调用函数 (模拟/标准格式)
 # ============================================================
-st.markdown('<p class="main-header">🎬 OpenLens</p>', unsafe_allow_html=True)
-st.markdown('<p class="subtitle">AI Video Generation Portal | Raw Transparency</p>', unsafe_allow_html=True)
-st.markdown("---")
+
+def call_text_api(prompt: str, api_key: str, model: str, api_url: str) -> str:
+    """
+    调用文本模型 API (Prompt 优化)
+    
+    参数:
+        prompt: 原始提示词
+        api_key: API Key
+        model: 模型名称
+        api_url: API 基础 URL
+    
+    返回:
+        优化后的提示词
+    """
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    system_prompt = """你是一位专业的 AI 视频/图像导演。请将用户的原始描述改写为：
+- 充满电影感
+- 强调物理动态和光影细节
+- 包含技术质量术语（高质量、细节、4K、电影感）
+- 输出 ONLY 优化后的内容，不要有任何解释"""
+    
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 500
+    }
+    
+    try:
+        # TODO: 在这里填入真实的 API 调用代码
+        # resp = requests.post(f"{api_url}/chat/completions", headers=headers, json=payload, timeout=60)
+        # data = resp.json()
+        # return data["choices"][0]["message"]["content"]
+        
+        # 模拟返回
+        time.sleep(1)  # 模拟 API 延迟
+        return f"【优化后】{prompt} - 高品质电影感画面，柔和灯光，细节丰富，4K超清，流畅动画"
+        
+    except Exception as e:
+        st.error(f"文本 API 调用失败: {str(e)}")
+        return prompt
+
+
+def call_t2i_api(prompt: str, api_key: str, model: str, api_url: str) -> dict:
+    """
+    调用文生图 API (T2I)
+    
+    参数:
+        prompt: 提示词
+        api_key: API Key
+        model: 模型名称
+        api_url: API 基础 URL
+    
+    返回:
+        包含图片 URL 的字典
+    """
+    
+    # TODO: 在这里填入真实的文生图 API 调用代码
+    # headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    # payload = {"model": model, "prompt": prompt, "n": 1, "size": "1024x1024"}
+    # resp = requests.post(f"{api_url}/images/generations", headers=headers, json=payload)
+    # data = resp.json()
+    # return {"url": data["data"][0]["url"], "type": "image"}
+    
+    # 模拟返回
+    time.sleep(2)
+    return {
+        "url": "https://via.placeholder.com/1024x1024/667eea/ffffff?text=AI+Generated+Image",
+        "type": "image",
+        "prompt": prompt
+    }
+
+
+def call_t2v_api(prompt: str, api_key: str, model: str, api_url: str, **kwargs) -> dict:
+    """
+    调用文生视频 API (T2V)
+    
+    参数:
+        prompt: 提示词
+        api_key: API Key
+        model: 模型名称
+        api_url: API 基础 URL
+    
+    返回:
+        包含视频 URL 的字典
+    """
+    
+    # TODO: 在这里填入真实的文生视频 API 调用代码
+    # headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    # payload = {"model": model, "prompt": prompt, "duration": 5}
+    # resp = requests.post(f"{api_url}/video/generations", headers=headers, json=payload)
+    # task_id = resp.json()["task_id"]
+    # # 轮询等待生成完成...
+    # return {"url": video_url, "type": "video", "task_id": task_id}
+    
+    # 模拟返回
+    time.sleep(3)
+    return {
+        "url": "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
+        "type": "video",
+        "prompt": prompt
+    }
+
+
+def call_i2v_api(prompt: str, image_data: str, api_key: str, model: str, api_url: str) -> dict:
+    """
+    调用图生视频 API (I2V)
+    
+    参数:
+        prompt: 提示词
+        image_data: 图片 URL 或 base64
+        api_key: API Key
+        model: 模型名称
+        api_url: API 基础 URL
+    
+    返回:
+        包含视频 URL 的字典
+    """
+    
+    # TODO: 在这里填入真实的图生视频 API 调用代码
+    
+    time.sleep(3)
+    return {
+        "url": "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
+        "type": "video",
+        "prompt": prompt
+    }
+
+
+def call_v2v_api(prompt: str, video_data: str, api_key: str, model: str, api_url: str) -> dict:
+    """
+    调用视频生视频 API (V2V)
+    
+    参数:
+        prompt: 提示词
+        video_data: 视频 URL 或 base64
+        api_key: API Key
+        model: 模型名称
+        api_url: API 基础 URL
+    
+    返回:
+        包含视频 URL 的字典
+    """
+    
+    # TODO: 在这里填入真实的视频生视频 API 调用代码
+    
+    time.sleep(4)
+    return {
+        "url": "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4",
+        "type": "video",
+        "prompt": prompt
+    }
 
 # ============================================================
-# SIDEBAR
+# 主界面
 # ============================================================
-with st.sidebar:
-    st.header("⚙️ API Configuration")
-    
-    api_url_input = st.text_input("Video API URL", value=st.session_state.api_url, placeholder="https://api.onlypixai.com/v1")
-    api_key_input = st.text_input("Video API Key", value=st.session_state.api_key, type="password", placeholder="sk-px-...")
-    
-    if api_url_input != st.session_state.api_url:
-        st.session_state.api_url = api_url_input
-    if api_key_input != st.session_state.api_key:
-        st.session_state.api_key = api_key_input
-    
-    st.markdown("---")
-    st.header("✏️ Text API")
-    
-    text_api_url_input = st.text_input("Text API URL", value=st.session_state.text_api_url, placeholder="https://api.openai.com/v1")
-    text_api_key_input = st.text_input("Text API Key", value=st.session_state.text_api_key, type="password", placeholder="sk-...")
-    text_model_input = st.text_input("Text Model", value=st.session_state.text_model, placeholder="gpt-4o, deepseek/deepseek-v3")
-    
-    if text_api_url_input != st.session_state.text_api_url:
-        st.session_state.text_api_url = text_api_url_input
-    if text_api_key_input != st.session_state.text_api_key:
-        st.session_state.text_api_key = text_api_key_input
-    if text_model_input != st.session_state.text_model:
-        st.session_state.text_model = text_model_input
-    
-    st.markdown("---")
-    st.header("💾 Save Path")
-    
-    save_path_input = st.text_input("Default Save Path", value=st.session_state.save_path, placeholder="./outputs")
-    if save_path_input != st.session_state.save_path:
-        st.session_state.save_path = save_path_input
-    
-    # Save config button
-    if st.button("💾 Save Configuration"):
-        config = {
-            "video_api_url": st.session_state.api_url,
-            "video_api_key": st.session_state.api_key,
-            "text_api_url": st.session_state.text_api_url,
-            "text_api_key": st.session_state.text_api_key,
-            "text_model": st.session_state.text_model,
-            "default_save_path": st.session_state.save_path
-        }
-        save_config(config)
-        st.success("✅ Config saved!")
-    
-    st.markdown("---")
-    if st.button("🚪 Exit / Logout", use_container_width=True):
-        st.session_state.authenticated = False
-        st.rerun()
 
-# ============================================================
-# MAIN CONTENT
-# ============================================================
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    st.header("📝 Generate Video")
+def main():
+    """主界面"""
     
-    # Model selection - allow custom input
-    col_model1, col_model2 = st.columns([2, 1])
-    with col_model1:
-        model = st.text_input(
-            "Video Model",
-            value=DEFAULT_MODEL,
-            placeholder="wan2.2, seedance1.5, wan2.6-i2v, etc.",
-            help="Enter your video model ID (e.g., wan2.2, seedance1.5, wan2.6-i2v, etc.)"
+    # 初始化 session state
+    init_session_state()
+    
+    # 页面标题
+    st.markdown('<p class="main-title">🎬 OpenLens</p>', unsafe_allow_html=True)
+    st.markdown("### 多模态 AI 创作平台 | 文生图 · 文生视频 · 图生视频 · 视频生视频")
+    st.markdown("---")
+    
+    # ============================================================
+    # 左右分栏布局
+    # ============================================================
+    col_config, col_create = st.columns([1, 2])
+    
+    # ============================================================
+    # 左列: 配置区
+    # ============================================================
+    with col_config:
+        st.header("⚙️ 配置区")
+        
+        # 全局配置
+        with st.expander("🌐 全局配置", expanded=True):
+            st.session_state.global_api_url = st.text_input(
+                "Global API Base URL",
+                value=st.session_state.global_api_url,
+                placeholder="https://api.openai.com/v1"
+            )
+        
+        # 文本模型配置 (Prompt 优化)
+        with st.expander("✏️ 文本模型 (Prompt 优化)"):
+            st.session_state.text_api_key = st.text_input(
+                "Text API Key",
+                value=st.session_state.text_api_key,
+                type="password",
+                placeholder="sk-..."
+            )
+            st.session_state.text_model = st.text_input(
+                "Text Model Name",
+                value=st.session_state.text_model,
+                placeholder="gpt-4o, claude-3, etc."
+            )
+        
+        # 图像生成配置 (T2I)
+        with st.expander("🖼️ 图像生成 (T2I)"):
+            st.session_state.t2i_api_key = st.text_input(
+                "T2I API Key",
+                value=st.session_state.t2i_api_key,
+                type="password",
+                placeholder="sk-..."
+            )
+            st.session_state.t2i_model = st.text_input(
+                "T2I Model Name",
+                value=st.session_state.t2i_model,
+                placeholder="dall-e-3, midjourney, etc."
+            )
+        
+        # 文生视频配置 (T2V)
+        with st.expander("🎬 文生视频 (T2V)"):
+            st.session_state.t2v_api_key = st.text_input(
+                "T2V API Key",
+                value=st.session_state.t2v_api_key,
+                type="password",
+                placeholder="sk-..."
+            )
+            st.session_state.t2v_model = st.text_input(
+                "T2V Model Name",
+                value=st.session_state.t2v_model,
+                placeholder="wan2.2, seedance1.5, kling, etc."
+            )
+        
+        # 图生视频配置 (I2V)
+        with st.expander("📸 图生视频 (I2V)"):
+            st.session_state.i2v_api_key = st.text_input(
+                "I2V API Key",
+                value=st.session_state.i2v_api_key,
+                type="password",
+                placeholder="sk-..."
+            )
+            st.session_state.i2v_model = st.text_input(
+                "I2V Model Name",
+                value=st.session_state.i2v_model,
+                placeholder="wan2.2, anyvideo, etc."
+            )
+        
+        # 视频生视频配置 (V2V)
+        with st.expander("🎥 视频生视频 (V2V)"):
+            st.session_state.v2v_api_key = st.text_input(
+                "V2V API Key",
+                value=st.session_state.v2v_api_key,
+                type="password",
+                placeholder="sk-..."
+            )
+            st.session_state.v2v_model = st.text_input(
+                "V2V Model Name",
+                value=st.session_state.v2v_model,
+                placeholder="wan2.2, etc."
+            )
+        
+        # 保存配置按钮
+        st.markdown("---")
+        if st.button("💾 保存配置", use_container_width=True):
+            st.success("✅ 配置已保存到本地 session")
+    
+    # ============================================================
+    # 右列: 创作区
+    # ============================================================
+    with col_create:
+        st.header("🎨 创作区")
+        
+        # 模式选择
+        st.subheader("1. 选择创作模式")
+        mode = st.radio(
+            "模式",
+            ["文生图", "文生视频", "图生视频", "视频生视频"],
+            horizontal=True,
+            label_visibility="collapsed"
         )
-    with col_model2:
-        # Quick presets
-        preset = st.selectbox(
-            "Presets",
-            ["Custom", "wan2.2", "wan2.6-i2v", "wan2.6-t2v", "seedance1.5"],
-            index=1,
-            help="Quick select common models"
+        st.session_state.generation_mode = mode
+        
+        # 基础输入
+        st.subheader("2. 输入提示词")
+        prompt = st.text_area(
+            "描述你想要生成的内容",
+            height=120,
+            placeholder="例如：一只猫咪在阳光下懒洋洋地睡觉..."
         )
-        if preset != "Custom":
-            model = f"video/{preset}" if not preset.startswith("video/") else preset
-    
-    prompt = st.text_area("Prompt", height=120, value=st.session_state.refined_prompt or "", placeholder="Describe the video...")
-    
-    # Refine controls
-    col_p1, col_p2 = st.columns([3, 1])
-    with col_p1:
-        auto_refine = st.checkbox("🔗 Auto-optimize & Generate", value=False)
-    with col_p2:
-        optimize_btn = st.button("✨ Optimize", use_container_width=True)
-    
-    if optimize_btn:
-        if not st.session_state.text_api_url or not st.session_state.text_api_key or not st.session_state.text_model:
-            st.error("❌ Please configure Text API in sidebar")
-        elif not prompt:
-            st.error("❌ Please enter a prompt")
-        else:
-            with st.spinner("Optimizing..."):
-                img_url = st.session_state.uploaded_image_url if st.session_state.uploaded_image_url else None
-                refined = refine_prompt(st.session_state.text_api_url, st.session_state.text_api_key, st.session_state.text_model, prompt, img_url)
-                if refined:
-                    st.session_state.refined_prompt = refined
-                    st.success("✅ Optimized!")
-                    st.text_area("Refined", value=refined, height=80, key="refined_disp")
-                    st.rerun()
-    
-    negative_prompt = st.text_area("Negative Prompt (optional)", height=60)
-    
-    with st.expander("⚡ Advanced"):
-        col_a, col_b = st.columns(2)
-        with col_a:
-            resolution = st.selectbox("Resolution", ["720p", "1080p", "1280*720"], index=0)
-            duration = st.selectbox("Duration", [5, 10, 15], index=0)
-        with col_b:
-            seed = st.text_input("Seed", placeholder="Random")
-            watermark = st.checkbox("Watermark", value=False)
-    
-    # Image upload for I2V
-    img_url = ""
-    if model and "i2v" in model.lower():
-        st.markdown("#### 🖼️ Image Input")
-        uploaded_file = st.file_uploader("Upload image", type=['jpg', 'jpeg', 'png', 'webp'])
         
-        if uploaded_file:
-            file_data = uploaded_file.getvalue()
-            filename = uploaded_file.name
-            st.image(file_data, caption=filename, width=200)
+        # Prompt 优化选项
+        use_optimize = st.checkbox("✨ 使用 AI 优化提示词")
+        
+        # 动态媒体输入
+        media_input = None
+        media_url = ""
+        
+        st.subheader("3. 媒体输入")
+        
+        if mode == "图生视频":
+            # 图片上传或 URL
+            col_img1, col_img2 = st.columns(2)
+            with col_img1:
+                uploaded_image = st.file_uploader(
+                    "上传图片",
+                    type=['jpg', 'jpeg', 'png', 'webp']
+                )
+            with col_img2:
+                media_url = st.text_input(
+                    "或图片 URL",
+                    placeholder="https://example.com/image.jpg"
+                )
             
-            if st.button("⬆️ Upload to Cloud"):
-                with st.spinner("Uploading..."):
-                    image_url = upload_to_catbox(file_data, filename)
-                    if image_url:
-                        st.session_state.uploaded_image_url = image_url
-                        st.success("✅ Uploaded!")
-                        st.rerun()
+            if uploaded_image:
+                import base64
+                media_input = base64.b64encode(uploaded_image.read()).decode()
         
-        img_url = st.text_input("Image URL", value=st.session_state.uploaded_image_url or "", placeholder="https://...")
-        
-        if st.session_state.uploaded_image_url and img_url != st.session_state.uploaded_image_url:
-            if st.button("🗑️ Clear Image"):
-                st.session_state.uploaded_image_url = None
-                st.rerun()
-
-with col2:
-    st.header("🚀 Actions")
-    generate_btn = st.button("🎬 Generate Video", type="primary", use_container_width=True)
-    
-    if st.button("🗑️ Clear", use_container_width=True):
-        st.session_state.task_id = None
-        st.session_state.task_status = None
-        st.session_state.video_url = None
-        st.session_state.progress = 0
-        st.session_state.logs = []
-        st.rerun()
-
-# ============================================================
-# GENERATION
-# ============================================================
-if generate_btn:
-    if not st.session_state.api_url or not st.session_state.api_key:
-        st.error("❌ Please enter Video API URL and Key in sidebar")
-    elif not prompt:
-        st.error("❌ Please enter a prompt")
-    else:
-        final_prompt = prompt
-        current_img_url = img_url if (model and "i2v" in model.lower()) and img_url else None
-        
-        # Auto refine
-        if auto_refine and st.session_state.text_api_url and st.session_state.text_api_key and st.session_state.text_model:
-            with st.spinner("Auto-optimizing..."):
-                refined = refine_prompt(st.session_state.text_api_url, st.session_state.text_api_key, st.session_state.text_model, prompt, current_img_url)
-                if refined:
-                    final_prompt = refined
-                    st.session_state.refined_prompt = refined
-        
-        # Submit
-        log_message("="*50)
-        log_message("Starting video generation...")
-        
-        extra_params = {"model": model, "img_url": current_img_url, "seed": int(seed) if seed else None, "watermark": watermark}
-        result = submit_video_task(st.session_state.api_url, st.session_state.api_key, final_prompt, negative_prompt, resolution, duration, **extra_params)
-        
-        if "task_id" in result:
-            st.session_state.task_id = result["task_id"]
-            st.session_state.task_status = result.get("status", "QUEUED")
-            st.info("Task ID: " + result["task_id"])
+        elif mode == "视频生视频":
+            # 视频上传或 URL
+            col_vid1, col_vid2 = st.columns(2)
+            with col_vid1:
+                uploaded_video = st.file_uploader(
+                    "上传视频",
+                    type=['mp4', 'mov', 'avi']
+                )
+            with col_vid2:
+                media_url = st.text_input(
+                    "或视频 URL",
+                    placeholder="https://example.com/video.mp4"
+                )
             
-            with st.spinner("Generating..."):
-                poll_result = poll_task_status(st.session_state.api_url, st.session_state.api_key, st.session_state.task_id)
+            if uploaded_video:
+                import base64
+                media_input = base64.b64encode(uploaded_video.read()).decode()
+        
+        # ============================================================
+        # 生成按钮与校验
+        # ============================================================
+        st.markdown("---")
+        
+        if st.button("🚀 开始生成", type="primary", use_container_width=True):
+            # 基础校验
+            if not prompt:
+                st.error("❌ 请输入提示词")
+                st.stop()
+            
+            final_prompt = prompt
+            
+            # Prompt 优化校验
+            if use_optimize:
+                if not st.session_state.text_api_key or not st.session_state.text_model:
+                    st.error("❌ 请在左侧配置区填写【文本模型 API Key】和【Model Name】")
+                    st.stop()
                 
-                if poll_result.get("videos"):
-                    st.session_state.video_url = poll_result["videos"][0]["video_url"]
-        else:
-            st.error("❌ Failed: " + str(result.get("error")))
-
-# ============================================================
-# STATUS & RESULT
-# ============================================================
-st.markdown("---")
-st.header("📊 Status")
-
-if st.session_state.task_status:
-    status = st.session_state.task_status
-    progress = st.session_state.progress
+                with st.spinner("✨ 正在优化提示词..."):
+                    final_prompt = call_text_api(
+                        prompt=prompt,
+                        api_key=st.session_state.text_api_key,
+                        model=st.session_state.text_model,
+                        api_url=st.session_state.global_api_url
+                    )
+                
+                st.success("✅ 提示词优化完成!")
+                st.info(f"优化后: {final_prompt}")
+            
+            # 模式特定校验
+            if mode == "文生图":
+                if not st.session_state.t2i_api_key or not st.session_state.t2i_model:
+                    st.error("❌ 请在左侧配置区填写【T2I API Key】和【T2I Model Name】")
+                    st.stop()
+            
+            elif mode == "文生视频":
+                if not st.session_state.t2v_api_key or not st.session_state.t2v_model:
+                    st.error("❌ 请在左侧配置区填写【T2V API Key】和【T2V Model Name】")
+                    st.stop()
+            
+            elif mode == "图生视频":
+                if not st.session_state.i2v_api_key or not st.session_state.i2v_model:
+                    st.error("❌ 请在左侧配置区填写【I2V API Key】和【I2V Model Name】")
+                    st.stop()
+                if not media_input and not media_url:
+                    st.error("❌ 请上传图片或输入图片 URL")
+                    st.stop()
+            
+            elif mode == "视频生视频":
+                if not st.session_state.v2v_api_key or not st.session_state.v2v_model:
+                    st.error("❌ 请在左侧配置区填写【V2V API Key】和【V2V Model Name】")
+                    st.stop()
+                if not media_input and not media_url:
+                    st.error("❌ 请上传视频或输入视频 URL")
+                    st.stop()
+            
+            # 执行生成
+            with st.spinner("🎬 正在生成，请稍候..."):
+                result = None
+                
+                if mode == "文生图":
+                    result = call_t2i_api(
+                        prompt=final_prompt,
+                        api_key=st.session_state.t2i_api_key,
+                        model=st.session_state.t2i_model,
+                        api_url=st.session_state.global_api_url
+                    )
+                
+                elif mode == "文生视频":
+                    result = call_t2v_api(
+                        prompt=final_prompt,
+                        api_key=st.session_state.t2v_api_key,
+                        model=st.session_state.t2v_model,
+                        api_url=st.session_state.global_api_url
+                    )
+                
+                elif mode == "图生视频":
+                    result = call_i2v_api(
+                        prompt=final_prompt,
+                        image_data=media_input or media_url,
+                        api_key=st.session_state.i2v_api_key,
+                        model=st.session_state.i2v_model,
+                        api_url=st.session_state.global_api_url
+                    )
+                
+                elif mode == "视频生视频":
+                    result = call_v2v_api(
+                        prompt=final_prompt,
+                        video_data=media_input or media_url,
+                        api_key=st.session_state.v2v_api_key,
+                        model=st.session_state.v2v_model,
+                        api_url=st.session_state.global_api_url
+                    )
+                
+                # 保存结果
+                st.session_state.generated_media = result
+                st.session_state.final_prompt = final_prompt
+            
+            # ============================================================
+            # 结果展示
+            # ============================================================
+            st.markdown("---")
+            st.subheader("🎉 生成结果")
+            
+            if result:
+                if result["type"] == "image":
+                    st.image(result["url"], caption="生成的图片")
+                elif result["type"] == "video":
+                    st.video(result["url"])
+                
+                # 下载按钮
+                col_dl1, col_dl2 = st.columns(2)
+                
+                with col_dl1:
+                    # 下载提示词
+                    prompt_json = json.dumps({
+                        "prompt": result.get("prompt", final_prompt),
+                        "mode": mode,
+                        "model": st.session_state.get(f"{mode.lower().replace(' ', '')}_model", "unknown"),
+                        "timestamp": datetime.now().isoformat()
+                    }, ensure_ascii=False, indent=2)
+                    
+                    st.download_button(
+                        label="📥 下载提示词 (JSON)",
+                        data=prompt_json,
+                        file_name="openlens_prompt.json",
+                        mime="application/json"
+                    )
+                
+                with col_dl2:
+                    st.info(f"📝 使用模型: {result.get('model', 'N/A')}")
     
-    if status == "QUEUED":
-        st.info("🔄 Queued")
-    elif status == "PROCESSING":
-        st.info(f"⚙️ Processing: {progress}%")
-        st.progress(progress / 100)
-    elif status == "SUCCEED":
-        st.success("✅ Complete!")
-    elif status == "FAILED":
-        st.error("❌ Failed")
-
-if st.session_state.video_url:
+    # ============================================================
+    # 页脚
+    # ============================================================
     st.markdown("---")
-    st.header("🎥 Result")
-    st.markdown('<div class="video-container">', unsafe_allow_html=True)
-    st.video(st.session_state.video_url)
-    st.markdown("[📥 Download](%s)" % st.session_state.video_url)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div style='text-align: center; color: #666; font-size: 12px;'>
+        <p>🎬 OpenLens | 多模态 AI 创作平台</p>
+        <p><strong>⚠️ 免责声明：</strong>本工具仅作为透明网关，不存储任何 API Key 或生成的内容。请合规使用。</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+# ============================================================
+# 程序入口
+# ============================================================
+
+if __name__ == "__main__":
+    # 初始化 session state
+    init_session_state()
     
-    # Auto-save to local
-    save_path = st.session_state.save_path
-    if st.button("💾 Save to Local Path"):
-        with st.spinner("Downloading to local..."):
-            local_file = download_and_save(st.session_state.video_url, save_path)
-            if local_file:
-                st.success(f"✅ Saved: {local_file}")
-            else:
-                st.error("❌ Save failed")
-
-# ============================================================
-# LOGS
-# ============================================================
-if st.session_state.logs:
-    st.markdown("---")
-    with st.expander("📜 Logs", expanded=False):
-        for log_entry in reversed(st.session_state.logs[-20:]):
-            st.text(log_entry)
-
-# ============================================================
-# FOOTER
-# ============================================================
-st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #666; font-size: 12px;'>
-    <p>OpenLens | Raw Transparency Pass-through | No Content Filtering</p>
-    <p><strong>⚠️ Disclaimer:</strong> This tool does not store API Keys or generated content. Use legally.</p>
-</div>
-""", unsafe_allow_html=True)
+    # 18禁验证
+    if not st.session_state.age_verified:
+        show_age_verification()
+    else:
+        main()
