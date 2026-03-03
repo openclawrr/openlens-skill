@@ -1,762 +1,416 @@
 #!/usr/bin/env python3
 """
 OpenLens - Multi-Modal AI Creation Platform
-============================================
-Version: 1.0.4
-Features: Text-to-Image, Text-to-Video, Image-to-Video, Video-to-Video
-Deploy: Streamlit Cloud | OpenClaw Skill
-
-i18n Support: English, 简体中文, 日本語
+Version: 1.0.5
+Features: T2I, T2V, I2V, V2V with Robust API Networking
 """
 
 import streamlit as st
 import requests
 import json
 import time
+import base64
 from datetime import datetime
 
 # ============================================================
-# Step 1: Translation Dictionary (i18n)
+# Translation Dictionary
 # ============================================================
 TRANSLATIONS = {
     "en": {
-        # Age Verification
-        "age_title": "OpenLens",
-        "age_subtitle": "Age Verification Required",
-        "age_description": "This platform provides multi-modal AI generation services. By proceeding, you confirm:",
-        "age_check_1": "I am 18 years or older",
-        "age_check_2": "I will use this platform legally",
-        "age_check_3": "I accept full responsibility for generated content",
-        "age_warning": "Any illegal or harmful content generation is strictly prohibited",
-        "age_enter": "I am 18+ - Enter",
-        "age_exit": "Exit",
-        "age_redirecting": "Redirecting...",
-        
-        # Main UI
-        "main_title": "OpenLens",
-        "main_subtitle": "Multi-Modal AI Creation Platform | T2I · T2V · I2V · V2V",
-        
-        # Configuration Panel
-        "config_title": "⚙️ Configuration",
-        "global_settings": "🌐 Global Settings",
-        "global_api_url": "Global API Base URL",
-        "global_api_url_placeholder": "https://api.openai.com/v1",
-        
-        "text_model": "✏️ Text Model (Prompt Optimization)",
-        "text_api_key": "Text API Key",
-        "text_api_key_placeholder": "sk-...",
-        "text_model_name": "Text Model Name",
-        "text_model_placeholder": "gpt-4o, claude-3, etc.",
-        
-        "t2i_model": "🖼️ Image Generation (T2I)",
-        "t2i_api_key": "T2I API Key",
-        "t2i_api_key_placeholder": "sk-...",
-        "t2i_model_name": "T2I Model Name",
-        "t2i_model_placeholder": "dall-e-3, midjourney, etc.",
-        
-        "t2v_model": "🎬 Text-to-Video (T2V)",
-        "t2v_api_key": "T2V API Key",
-        "t2v_api_key_placeholder": "sk-...",
-        "t2v_model_name": "T2V Model Name",
-        "t2v_model_placeholder": "wan2.2, seedance1.5, kling, etc.",
-        
-        "i2v_model": "📸 Image-to-Video (I2V)",
-        "i2v_api_key": "I2V API Key",
-        "i2v_api_key_placeholder": "sk-...",
-        "i2v_model_name": "I2V Model Name",
-        "i2v_model_placeholder": "wan2.2, anyvideo, etc.",
-        
-        "v2v_model": "🎥 Video-to-Video (V2V)",
-        "v2v_api_key": "V2V API Key",
-        "v2v_api_key_placeholder": "sk-...",
-        "v2v_model_name": "V2V Model Name",
-        "v2v_model_placeholder": "wan2.2, etc.",
-        
-        "save_config": "💾 Save Configuration",
-        "save_config_success": "✅ Configuration saved to session",
-        
-        # Creation Panel
-        "create_title": "🎨 Creation",
-        "step_1": "1. Select Mode",
-        "mode_t2i": "Text-to-Image",
-        "mode_t2v": "Text-to-Video",
-        "mode_i2v": "Image-to-Video",
-        "mode_v2v": "Video-to-Video",
-        
-        "step_2": "2. Enter Prompt",
-        "prompt_label": "Describe what you want to generate",
-        "prompt_placeholder": "E.g., A cat sleeping lazily in the sunlight...",
-        "use_ai_optimize": "✨ Use AI to optimize prompt",
-        
-        "step_3": "3. Media Input",
-        "upload_image": "Upload Image",
-        "or_image_url": "Or Image URL",
-        "image_url_placeholder": "https://example.com/image.jpg",
-        "upload_video": "Upload Video",
-        "or_video_url": "Or Video URL",
-        "video_url_placeholder": "https://example.com/video.mp4",
-        
-        # Generate
-        "generate": "🚀 Start Generation",
-        "generating": "🎬 Generating... Please wait...",
-        
-        # Validation Errors
-        "error_no_prompt": "❌ Please enter a prompt",
-        "error_text_api": "❌ Please fill in Text API Key and Model Name in Configuration",
-        "error_t2i_api": "❌ Please fill in T2I API Key and Model Name",
-        "error_t2v_api": "❌ Please fill in T2V API Key and Model Name",
-        "error_i2v_api": "❌ Please fill in I2V API Key and Model Name",
-        "error_i2v_media": "❌ Please upload an image or enter an image URL",
-        "error_v2v_api": "❌ Please fill in V2V API Key and Model Name",
-        "error_v2v_media": "❌ Please upload a video or enter a video URL",
-        
-        # Success Messages
-        "optimize_title": "✨ Optimizing prompt...",
-        "optimize_success": "✅ Prompt optimized!",
-        "enhanced_prompt": "Enhanced:",
-        
-        # Result
-        "result_title": "🎉 Result",
-        "result_image": "Generated Image",
-        "result_video": "Generated Video",
-        "download_prompt": "📥 Download Prompt (JSON)",
-        
-        # Footer
-        "footer_title": "OpenLens | Multi-Modal AI Creation Platform",
-        "footer_disclaimer": "⚠️ Disclaimer: This tool is a transparent gateway only. We do not store any API Keys.",
-        
-        # Language
-        "language": "🌍 Language",
+        "age_title": "OpenLens", "age_subtitle": "Age Verification Required",
+        "age_description": "This platform provides multi-modal AI. By proceeding, you confirm:",
+        "age_check_1": "I am 18 years or older", "age_check_2": "I will use legally",
+        "age_check_3": "I accept full responsibility", "age_warning": "Illegal content prohibited",
+        "age_enter": "I am 18+ - Enter", "age_exit": "Exit", "age_redirecting": "Redirecting...",
+        "main_title": "OpenLens", "main_subtitle": "Multi-Modal AI | T2I T2V I2V V2V",
+        "config_title": "Configuration", "global_settings": "Global Settings",
+        "global_api_url": "API Base URL", "global_api_url_placeholder": "https://api.openai.com/v1",
+        "text_model": "Text Model (Prompt)", "text_api_key": "Text API Key", "text_api_key_placeholder": "sk-...",
+        "text_model_name": "Model Name", "text_model_placeholder": "gpt-4o",
+        "t2i_model": "Image (T2I)", "t2i_api_key": "T2I API Key", "t2i_api_key_placeholder": "sk-...",
+        "t2i_model_name": "T2I Model", "t2i_model_placeholder": "dall-e-3",
+        "t2v_model": "Video (T2V)", "t2v_api_key": "T2V API Key", "t2v_api_key_placeholder": "sk-...",
+        "t2v_model_name": "T2V Model", "t2v_model_placeholder": "wan2.2",
+        "i2v_model": "I2V", "i2v_api_key": "I2V API Key", "i2v_api_key_placeholder": "sk-...",
+        "i2v_model_name": "I2V Model", "i2v_model_placeholder": "wan2.2",
+        "v2v_model": "V2V", "v2v_api_key": "V2V API Key", "v2v_api_key_placeholder": "sk-...",
+        "v2v_model_name": "V2V Model", "v2v_model_placeholder": "wan2.2",
+        "save_config": "Save", "save_config_success": "Saved",
+        "create_title": "Creation", "step_1": "Select Mode",
+        "mode_t2i": "Text-to-Image", "mode_t2v": "Text-to-Video",
+        "mode_i2v": "Image-to-Video", "mode_v2v": "Video-to-Video",
+        "step_2": "Enter Prompt", "prompt_label": "Describe what you want",
+        "prompt_placeholder": "E.g., A cat in sunlight...",
+        "use_ai_optimize": "Optimize prompt",
+        "step_3": "Media Input", "upload_image": "Upload Image",
+        "or_image_url": "Or Image URL", "image_url_placeholder": "https://...",
+        "upload_video": "Upload Video", "or_video_url": "Or Video URL",
+        "generate": "Generate", "generating": "Generating (1-3 min for video)...",
+        "error_no_prompt": "Enter prompt", "error_text_api": "Fill Text API config",
+        "error_t2i_api": "Fill T2I API config", "error_t2v_api": "Fill T2V API config",
+        "error_i2v_api": "Fill I2V API config", "error_i2v_media": "Add image",
+        "error_v2v_api": "Fill V2V API config", "error_v2v_media": "Add video",
+        "error_api": "API Error", "error_network": "Network Error",
+        "optimize_title": "Optimizing...", "optimize_success": "Optimized!",
+        "enhanced": "Enhanced:", "result_title": "Result",
+        "result_image": "Image", "result_video": "Video",
+        "download": "Download Prompt",
+        "footer_title": "OpenLens", "footer_disclaimer": "No API Keys stored",
+        "language": "Language", "polling": "Checking... ({}/{})",
+        "task_id": "Task ID:", "success": "Success!", "failed": "Failed",
     },
-    
     "zh": {
-        # Age Verification
-        "age_title": "OpenLens",
-        "age_subtitle": "需要年龄验证",
-        "age_description": "本平台提供多模态AI生成服务。继续即表示您确认：",
-        "age_check_1": "我已年满 18 岁",
-        "age_check_2": "我将合法使用本平台",
-        "age_check_3": "我对生成内容承担全部责任",
-        "age_warning": "任何违法或有害内容生成均被严格禁止",
-        "age_enter": "我已满18岁 - 进入",
-        "age_exit": "离开",
-        "age_redirecting": "正在跳转...",
-        
-        # Main UI
-        "main_title": "OpenLens",
-        "main_subtitle": "多模态AI创作平台 | T2I · T2V · I2V · V2V",
-        
-        # Configuration Panel
-        "config_title": "⚙️ 配置",
-        "global_settings": "🌐 全局设置",
-        "global_api_url": "Global API 基础URL",
-        "global_api_url_placeholder": "https://api.openai.com/v1",
-        
-        "text_model": "✏️ 文本模型 (提示词优化)",
-        "text_api_key": "文本 API Key",
-        "text_api_key_placeholder": "sk-...",
-        "text_model_name": "文本模型名称",
-        "text_model_placeholder": "gpt-4o, claude-3 等",
-        
-        "t2i_model": "🖼️ 图像生成 (T2I)",
-        "t2i_api_key": "T2I API Key",
-        "t2i_api_key_placeholder": "sk-...",
-        "t2i_model_name": "T2I 模型名称",
-        "t2i_model_placeholder": "dall-e-3, midjourney 等",
-        
-        "t2v_model": "🎬 文生视频 (T2V)",
-        "t2v_api_key": "T2V API Key",
-        "t2v_api_key_placeholder": "sk-...",
-        "t2v_model_name": "T2V 模型名称",
-        "t2v_model_placeholder": "wan2.2, seedance1.5, kling 等",
-        
-        "i2v_model": "📸 图生视频 (I2V)",
-        "i2v_api_key": "I2V API Key",
-        "i2v_api_key_placeholder": "sk-...",
-        "i2v_model_name": "I2V 模型名称",
-        "i2v_model_placeholder": "wan2.2, anyvideo 等",
-        
-        "v2v_model": "🎥 视频生视频 (V2V)",
-        "v2v_api_key": "V2V API Key",
-        "v2v_api_key_placeholder": "sk-...",
-        "v2v_model_name": "V2V 模型名称",
-        "v2v_model_placeholder": "wan2.2 等",
-        
-        "save_config": "💾 保存配置",
-        "save_config_success": "✅ 配置已保存到会话",
-        
-        # Creation Panel
-        "create_title": "🎨 创作",
-        "step_1": "1. 选择模式",
-        "mode_t2i": "文生图",
-        "mode_t2v": "文生视频",
-        "mode_i2v": "图生视频",
-        "mode_v2v": "视频生视频",
-        
-        "step_2": "2. 输入提示词",
-        "prompt_label": "描述你想要生成的内容",
-        "prompt_placeholder": "例如：一只猫咪在阳光下懒洋洋地睡觉...",
-        "use_ai_optimize": "✨ 使用AI优化提示词",
-        
-        "step_3": "3. 媒体输入",
-        "upload_image": "上传图片",
-        "or_image_url": "或图片URL",
-        "image_url_placeholder": "https://example.com/image.jpg",
-        "upload_video": "上传视频",
-        "or_video_url": "或视频URL",
-        "video_url_placeholder": "https://example.com/video.mp4",
-        
-        # Generate
-        "generate": "🚀 开始生成",
-        "generating": "🎬 正在生成，请稍候...",
-        
-        # Validation Errors
-        "error_no_prompt": "❌ 请输入提示词",
-        "error_text_api": "❌ 请在配置区填写文本API Key和模型名称",
-        "error_t2i_api": "❌ 请填写T2I API Key和模型名称",
-        "error_t2v_api": "❌ 请填写T2V API Key和模型名称",
-        "error_i2v_api": "❌ 请填写I2V API Key和模型名称",
-        "error_i2v_media": "❌ 请上传图片或输入图片URL",
-        "error_v2v_api": "❌ 请填写V2V API Key和模型名称",
-        "error_v2v_media": "❌ 请上传视频或输入视频URL",
-        
-        # Success Messages
-        "optimize_title": "✨ 正在优化提示词...",
-        "optimize_success": "✅ 提示词优化完成！",
-        "enhanced_prompt": "优化后：",
-        
-        # Result
-        "result_title": "🎉 结果",
-        "result_image": "生成的图片",
-        "result_video": "生成的视频",
-        "download_prompt": "📥 下载提示词 (JSON)",
-        
-        # Footer
-        "footer_title": "OpenLens | 多模态AI创作平台",
-        "footer_disclaimer": "⚠️ 免责声明：本工具仅作为透明网关，不存储任何API Key。",
-        
-        # Language
-        "language": "🌍 语言",
+        "age_title": "OpenLens", "age_subtitle": "需要年龄验证",
+        "age_description": "本平台提供多模态AI生成服务。继续即表示确认：",
+        "age_check_1": "我已满18岁", "age_check_2": "我将合法使用",
+        "age_check_3": "我承担全部责任", "age_warning": "禁止违法内容",
+        "age_enter": "我已满18岁 - 进入", "age_exit": "离开", "age_redirecting": "跳转中...",
+        "main_title": "OpenLens", "main_subtitle": "多模态AI创作 | T2I T2V I2V V2V",
+        "config_title": "配置", "global_settings": "全局设置",
+        "global_api_url": "API基础URL", "global_api_url_placeholder": "https://api.openai.com/v1",
+        "text_model": "文本模型(提示词)", "text_api_key": "文本API Key", "text_api_key_placeholder": "sk-...",
+        "text_model_name": "模型名称", "text_model_placeholder": "gpt-4o",
+        "t2i_model": "图像(T2I)", "t2i_api_key": "T2I API Key", "t2i_api_key_placeholder": "sk-...",
+        "t2i_model_name": "T2I模型", "t2i_model_placeholder": "dall-e-3",
+        "t2v_model": "视频(T2V)", "t2v_api_key": "T2V API Key", "t2v_api_key_placeholder": "sk-...",
+        "t2v_model_name": "T2V模型", "t2v_model_placeholder": "wan2.2",
+        "i2v_model": "图生视频(I2V)", "i2v_api_key": "I2V API Key", "i2v_api_key_placeholder": "sk-...",
+        "i2v_model_name": "I2V模型", "i2v_model_placeholder": "wan2.2",
+        "v2v_model": "视频生视频(V2V)", "v2v_api_key": "V2V API Key", "v2v_api_key_placeholder": "sk-...",
+        "v2v_model_name": "V2V模型", "v2v_model_placeholder": "wan2.2",
+        "save_config": "保存", "save_config_success": "已保存",
+        "create_title": "创作", "step_1": "选择模式",
+        "mode_t2i": "文生图", "mode_t2v": "文生视频",
+        "mode_i2v": "图生视频", "mode_v2v": "视频生视频",
+        "step_2": "输入提示词", "prompt_label": "描述你想生成的内容",
+        "prompt_placeholder": "例如：阳光下的猫...",
+        "use_ai_optimize": "优化提示词",
+        "step_3": "媒体输入", "upload_image": "上传图片",
+        "or_image_url": "或图片URL", "image_url_placeholder": "https://...",
+        "upload_video": "上传视频", "or_video_url": "或视频URL",
+        "generate": "生成", "generating": "生成中...(视频需要1-3分钟)",
+        "error_no_prompt": "请输入提示词", "error_text_api": "填写文本API配置",
+        "error_t2i_api": "填写T2I API配置", "error_t2v_api": "填写T2V API配置",
+        "error_i2v_api": "填写I2V API配置", "error_i2v_media": "添加图片",
+        "error_v2v_api": "填写V2V API配置", "error_v2v_media": "添加视频",
+        "error_api": "API错误", "error_network": "网络错误",
+        "optimize_title": "优化中...", "optimize_success": "优化完成！",
+        "enhanced": "优化后:", "result_title": "结果",
+        "result_image": "图片", "result_video": "视频",
+        "download": "下载提示词",
+        "footer_title": "OpenLens", "footer_disclaimer": "不存储API Key",
+        "language": "语言", "polling": "检查中... ({}/{})",
+        "task_id": "任务ID:", "success": "成功！", "failed": "失败",
     },
-    
     "ja": {
-        # Age Verification
-        "age_title": "OpenLens",
-        "age_subtitle": "年齢確認",
-        "age_description": "このプラットフォームはマルチモーダルAI生成サービスを提供します。続行することで以下を確認：",
-        "age_check_1": "私は18歳以上です",
-        "age_check_2": "私はこのプラットフォームを合法的に使用します",
-        "age_check_3": "生成されたコンテンツに対して全責任を負います",
-        "age_warning": "違法または有害なコンテンツ生成は厳密に禁止されています",
-        "age_enter": "18歳以上 - 進む",
-        "age_exit": "退出",
-        "age_redirecting": "リダイレクト中...",
-        
-        # Main UI
-        "main_title": "OpenLens",
-        "main_subtitle": "マルチモーダルAI作成プラットフォーム | T2I · T2V · I2V · V2V",
-        
-        # Configuration Panel
-        "config_title": "⚙️ 設定",
-        "global_settings": "🌐 グローバル設定",
-        "global_api_url": "グローバルAPI Base URL",
-        "global_api_url_placeholder": "https://api.openai.com/v1",
-        
-        "text_model": "✏️ テキストモデル（プロンプト最適化）",
-        "text_api_key": "テキストAPI Key",
-        "text_api_key_placeholder": "sk-...",
-        "text_model_name": "テキストモデル名",
-        "text_model_placeholder": "gpt-4o, claude-3 など",
-        
-        "t2i_model": "🖼️ 画像生成 (T2I)",
-        "t2i_api_key": "T2I API Key",
-        "t2i_api_key_placeholder": "sk-...",
-        "t2i_model_name": "T2I モデル名",
-        "t2i_model_placeholder": "dall-e-3, midjourney など",
-        
-        "t2v_model": "🎬 テキストから動画 (T2V)",
-        "t2v_api_key": "T2V API Key",
-        "t2v_api_key_placeholder": "sk-...",
-        "t2v_model_name": "T2V モデル名",
-        "t2v_model_placeholder": "wan2.2, seedance1.5, kling など",
-        
-        "i2v_model": "📸 画像から動画 (I2V)",
-        "i2v_api_key": "I2V API Key",
-        "i2v_api_key_placeholder": "sk-...",
-        "i2v_model_name": "I2V モデル名",
-        "i2v_model_placeholder": "wan2.2, anyvideo など",
-        
-        "v2v_model": "🎥 動画から動画 (V2V)",
-        "v2v_api_key": "V2V API Key",
-        "v2v_api_key_placeholder": "sk-...",
-        "v2v_model_name": "V2V モデル名",
-        "v2v_model_placeholder": "wan2.2 など",
-        
-        "save_config": "💾 設定を保存",
-        "save_config_success": "✅ 設定がセッションに保存されました",
-        
-        # Creation Panel
-        "create_title": "🎨 作成",
-        "step_1": "1. モードを選択",
-        "mode_t2i": "画像生成",
-        "mode_t2v": "動画生成",
-        "mode_i2v": "画像から動画",
-        "mode_v2v": "動画から動画",
-        
-        "step_2": "2. プロンプトを入力",
-        "prompt_label": "生成したい内容を描述",
-        "prompt_placeholder": "例：阳光下でのんびりと眠る猫...",
-        "use_ai_optimize": "✨ AIでプロンプトを最適化",
-        
-        "step_3": "3. メディア入力",
-        "upload_image": "画像をアップロード",
-        "or_image_url": "または画像URL",
-        "image_url_placeholder": "https://example.com/image.jpg",
-        "upload_video": "動画をアップロード",
-        "or_video_url": "または動画URL",
-        "video_url_placeholder": "https://example.com/video.mp4",
-        
-        # Generate
-        "generate": "🚀 生成開始",
-        "generating": "🎬 生成中...お待ちください...",
-        
-        # Validation Errors
-        "error_no_prompt": "❌ プロンプトを入力してください",
-        "error_text_api": "❌ 設定でテキストAPI Keyとモデル名を入力してください",
-        "error_t2i_api": "❌ T2I API Keyとモデル名を入力してください",
-        "error_t2v_api": "❌ T2V API Keyとモデル名を入力してください",
-        "error_i2v_api": "❌ I2V API Keyとモデル名を入力してください",
-        "error_i2v_media": "❌ 画像をアップロードするか画像URLを入力してください",
-        "error_v2v_api": "❌ V2V API Keyとモデル名を入力してください",
-        "error_v2v_media": "❌ 動画をアップロードするか動画URLを入力してください",
-        
-        # Success Messages
-        "optimize_title": "✨ プロンプトを最適化中...",
-        "optimize_success": "✅ プロンプトが最適化されました！",
-        "enhanced_prompt": "最適化後：",
-        
-        # Result
-        "result_title": "🎉 結果",
-        "result_image": "生成された画像",
-        "result_video": "生成された動画",
-        "download_prompt": "📥 プロンプトをダウンロード (JSON)",
-        
-        # Footer
-        "footer_title": "OpenLens | マルチモーダルAI作成プラットフォーム",
-        "footer_disclaimer": "⚠️ 免責事項：このツールは透明なゲートウェイです。API Keyは保存しません。",
-        
-        # Language
-        "language": "🌍 言語",
+        "age_title": "OpenLens", "age_subtitle": "年齢確認",
+        "age_description": "このプラットフォームはマルチモーダルAI。続行で以下を確認：",
+        "age_check_1": "18歳以上", "age_check_2": "合法的に使用",
+        "age_check_3": "全責任を負う", "age_warning": "違法コンテンツ禁止",
+        "age_enter": "18歳以上 - 進む", "age_exit": "退出", "age_redirecting": "リダイレクト...",
+        "main_title": "OpenLens", "main_subtitle": "マルチモーダルAI | T2I T2V I2V V2V",
+        "config_title": "設定", "global_settings": "グローバル設定",
+        "global_api_url": "API Base URL", "global_api_url_placeholder": "https://api.openai.com/v1",
+        "text_model": "テキストモデル", "text_api_key": "テキストAPI Key", "text_api_key_placeholder": "sk-...",
+        "text_model_name": "モデル名", "text_model_placeholder": "gpt-4o",
+        "t2i_model": "画像(T2I)", "t2i_api_key": "T2I API Key", "t2i_api_key_placeholder": "sk-...",
+        "t2i_model_name": "T2I モデル", "t2i_model_placeholder": "dall-e-3",
+        "t2v_model": "動画(T2V)", "t2v_api_key": "T2V API Key", "t2v_api_key_placeholder": "sk-...",
+        "t2v_model_name": "T2V モデル", "t2v_model_placeholder": "wan2.2",
+        "i2v_model": "画像から動画(I2V)", "i2v_api_key": "I2V API Key", "i2v_api_key_placeholder": "sk-...",
+        "i2v_model_name": "I2V モデル", "i2v_model_placeholder": "wan2.2",
+        "v2v_model": "動画から動画(V2V)", "v2v_api_key": "V2V API Key", "v2v_api_key_placeholder": "sk-...",
+        "v2v_model_name": "V2V モデル", "v2v_model_placeholder": "wan2.2",
+        "save_config": "保存", "save_config_success": "保存済み",
+        "create_title": "作成", "step_1": "モード選択",
+        "mode_t2i": "画像生成", "mode_t2v": "動画生成",
+        "mode_i2v": "画像から動画", "mode_v2v": "動画から動画",
+        "step_2": "プロンプト", "prompt_label": "生成内容を描述",
+        "prompt_placeholder": "例：陽光下の猫...",
+        "use_ai_optimize": "プロンプト最適化",
+        "step_3": "メディア入力", "upload_image": "画像アップロード",
+        "or_image_url": "または画像URL", "image_url_placeholder": "https://...",
+        "upload_video": "動画アップロード", "or_video_url": "または動画URL",
+        "generate": "生成", "generating": "生成中...(動画1-3分)",
+        "error_no_prompt": "プロンプトを入力", "error_text_api": "テキストAPI設定",
+        "error_t2i_api": "T2I API設定", "error_t2v_api": "T2V API設定",
+        "error_i2v_api": "I2V API設定", "error_i2v_media": "画像を追加",
+        "error_v2v_api": "V2V API設定", "error_v2v_media": "動画を追加",
+        "error_api": "APIエラー", "error_network": "ネットワークエラー",
+        "optimize_title": "最適化中...", "optimize_success": "最適化完了！",
+        "enhanced": "最適化後:", "result_title": "結果",
+        "result_image": "画像", "result_video": "動画",
+        "download": "プロンプトDL",
+        "footer_title": "OpenLens", "footer_disclaimer": "API Key保存なし",
+        "language": "言語", "polling": "確認中... ({}/{})",
+        "task_id": "タスクID:", "success": "成功！", "failed": "失敗",
     }
 }
 
-# ============================================================
-# Step 2: Translation Function
-# ============================================================
 def t(key):
-    """Translate a key based on current language"""
     lang = st.session_state.get("current_lang", "en")
-    return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, TRANSLATIONS["en"].get(key, key))
+    return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
 
 # ============================================================
-# Session State Initialization
+# Session State
 # ============================================================
 if 'age_verified' not in st.session_state:
     st.session_state.age_verified = False
-
 if 'current_lang' not in st.session_state:
     st.session_state.current_lang = "en"
 
 # ============================================================
-# Age Verification Gate
+# Age Verification
 # ============================================================
 if not st.session_state.age_verified:
-    st.set_page_config(
-        page_title="OpenLens - Age Verification",
-        page_icon="🎬",
-        layout="centered"
-    )
-    
-    st.markdown("""
-    <style>
-    .stApp { background: #0a0a0a; }
-    .age-box { background: #1a1a1a; border: 2px solid #667eea; border-radius: 20px; padding: 50px; max-width: 550px; margin: 80px auto; text-align: center; }
-    .age-title { font-size: 32px; font-weight: bold; color: #fff; margin-bottom: 25px; }
-    .age-text { color: #aaa; font-size: 15px; line-height: 1.8; }
-    .age-check { color: #fff; margin: 20px 0; text-align: left; padding: 0 40px; }
-    .age-warning { color: #ef4444; font-size: 13px; padding: 12px; background: rgba(239,68,68,0.15); border-radius: 8px; margin-top: 20px; }
-    .stButton > button { width: 100%; margin: 8px 0; }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div class="age-box">
-        <div class="age-title">🎬 {t('age_title')}</div>
-        <div class="age-text">
-            <strong>{t('age_subtitle')}</strong><br><br>
-            {t('age_description')}
-        </div>
-        <div class="age-check">
-            ✅ {t('age_check_1')}<br>
-            ✅ {t('age_check_2')}<br>
-            ✅ {t('age_check_3')}
-        </div>
-        <div class="age-warning">
-            ⚠️ {t('age_warning')}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([2, 1])
-    
+    st.set_page_config(page_title="OpenLens", page_icon="🎬", layout="centered")
+    st.markdown("<style>.stApp{background:#0a0a0a}.age-box{background:#1a1a1a;border:2px solid #667eea;border-radius:20px;padding:40px;max-width:500px;margin:80px auto;text-align:center}.age-title{font-size:28px;font-weight:bold;color:#fff;margin-bottom:20px}.age-check{color:#fff;margin:15px 0;text-align:left;padding:0 30px}.stButton>button{width:100%;margin:5px 0}</style>", unsafe_allow_html=True)
+    st.markdown(f"<div class='age-box'><div class='age-title'>🎬 {t('age_title')}</div><div style='color:#aaa;margin-bottom:15px'>{t('age_subtitle')}</div><div class='age-check'>✅ {t('age_check_1')}<br>✅ {t('age_check_2')}<br>✅ {t('age_check_3')}</div><div style='color:#ef4444;font-size:12px;margin-top:15px'>{t('age_warning')}</div></div>", unsafe_allow_html=True)
+    col1, col2 = st.columns([2,1])
     with col1:
-        if st.button(t("age_enter"), type="primary", key="age_confirm"):
+        if st.button(t("age_enter"), type="primary"):
             st.session_state.age_verified = True
             st.rerun()
-    
     with col2:
-        if st.button(t("age_exit"), key="age_exit"):
-            st.markdown("""
-            <script>window.parent.location.href = "https://www.google.com";</script>
-            """, unsafe_allow_html=True)
-            st.warning(t("age_redirecting"))
-    
+        if st.button(t("age_exit")):
+            st.markdown("<script>window.parent.location.href='https://www.google.com';</script>", unsafe_allow_html=True)
     st.stop()
 
 # ============================================================
-# Main App Config
+# Main Config
 # ============================================================
-st.set_page_config(
-    page_title="OpenLens - AI Multi-Modal Creation",
-    page_icon="🎬",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="OpenLens", page_icon="🎬", layout="wide")
 
-# ============================================================
-# Session State - API Config
-# ============================================================
-if 'global_api_url' not in st.session_state:
-    st.session_state.global_api_url = "https://api.openai.com/v1"
+defaults = {
+    "global_api_url": "https://api.openai.com/v1",
+    "text_api_key": "", "text_model": "gpt-4o",
+    "t2i_api_key": "", "t2i_model": "dall-e-3",
+    "t2v_api_key": "", "t2v_model": "wan2.2",
+    "i2v_api_key": "", "i2v_model": "wan2.2",
+    "v2v_api_key": "", "v2v_model": "wan2.2",
+}
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-if 'text_api_key' not in st.session_state:
-    st.session_state.text_api_key = ""
-if 'text_model' not in st.session_state:
-    st.session_state.text_model = "gpt-4o"
+st.markdown("<style>.stApp{background:#0a0a0a;color:#e0e0e0}.stTextInput>div>div>input,.stTextArea>div>div>textarea{background:#1a1a1a;border:1px solid #333;color:#fff}.stButton>button{background:linear-gradient(135deg,#667eea,#764ba2);border:none;color:white}</style>", unsafe_allow_html=True)
 
-if 't2i_api_key' not in st.session_state:
-    st.session_state.t2i_api_key = ""
-if 't2i_model' not in st.session_state:
-    st.session_state.t2i_model = "dall-e-3"
-
-if 't2v_api_key' not in st.session_state:
-    st.session_state.t2v_api_key = ""
-if 't2v_model' not in st.session_state:
-    st.session_state.t2v_model = "wan2.2"
-
-if 'i2v_api_key' not in st.session_state:
-    st.session_state.i2v_api_key = ""
-if 'i2v_model' not in st.session_state:
-    st.session_state.i2v_model = "wan2.2"
-
-if 'v2v_api_key' not in st.session_state:
-    st.session_state.v2v_api_key = ""
-if 'v2v_model' not in st.session_state:
-    st.session_state.v2v_model = "wan2.2"
-
-if 'generated_media' not in st.session_state:
-    st.session_state.generated_media = None
-if 'final_prompt' not in st.session_state:
-    st.session_state.final_prompt = ""
-if 'generation_mode' not in st.session_state:
-    st.session_state.generation_mode = "Text-to-Image"
-
-# ============================================================
-# CSS
-# ============================================================
-st.markdown("""
-<style>
-.stApp { background: #0a0a0a; color: #e0e0e0; }
-.stTextInput > div > div > input { background: #1a1a1a; border: 1px solid #333; color: #fff; }
-.stTextArea > div > div > textarea { background: #1a1a1a; border: 1px solid #333; color: #fff; }
-.stButton > button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; font-weight: 600; }
-.main-title { font-size: 2.5rem; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-</style>
-""", unsafe_allow_html=True)
-
-# ============================================================
-# Language Switcher (Top of Sidebar)
-# ============================================================
 with st.sidebar:
     st.markdown("---")
-    lang = st.selectbox(t("language"), ["en", "zh", "ja"], 
-                        format_func=lambda x: {"en": "English", "zh": "简体中文", "ja": "日本語"}[x],
-                        index=["en", "zh", "ja"].index(st.session_state.current_lang))
+    lang = st.selectbox(t("language"), ["en","zh","ja"], format_func=lambda x: {"en":"English","zh":"简体中文","ja":"日本語"}[x], index=["en","zh","ja"].index(st.session_state.current_lang))
     if lang != st.session_state.current_lang:
         st.session_state.current_lang = lang
         st.rerun()
 
 # ============================================================
-# API Functions (TODO: Add real API calls)
+# ROBUST API FUNCTIONS
 # ============================================================
 
-def call_text_api(prompt, api_key, model, api_url):
-    """Text Model API for Prompt Optimization"""
-    time.sleep(1)
-    return f"【Enhanced】{prompt} - High quality cinematic footage, soft lighting, detailed, 4K, smooth animation"
+def make_headers(api_key):
+    return {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-def call_t2i_api(prompt, api_key, model, api_url):
-    """Text-to-Image API"""
-    time.sleep(2)
-    return {"url": "https://via.placeholder.com/1024x1024/667eea/ffffff?text=AI+Generated+Image", "type": "image", "prompt": prompt}
+def handle_error(resp, msg=""):
+    try:
+        err = resp.json().get("error", {}).get("message", str(resp.text[:100]))
+    except:
+        err = resp.text[:100]
+    st.error(f"{t('error_api')}: {err} {msg}")
+    return None
 
-def call_t2v_api(prompt, api_key, model, api_url, **kwargs):
-    """Text-to-Video API"""
-    time.sleep(3)
-    return {"url": "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4", "type": "video", "prompt": prompt}
+def call_text(prompt, api_key, model, api_url):
+    """文本模型 API"""
+    headers = make_headers(api_key)
+    payload = {"model": model, "messages":[{"role":"system","content":"Enhance prompt with cinematic details."},{"role":"user","content":prompt}], "temperature":0.7}
+    try:
+        r = requests.post(f"{api_url}/chat/completions", headers=headers, json=payload, timeout=60)
+        if r.status_code != 200: return handle_error(r)
+        return r.json()["choices"][0]["message"]["content"]
+    except Exception as e:
+        st.error(f"{t('error_network')}: {e}")
+        return None
 
-def call_i2v_api(prompt, image_data, api_key, model, api_url):
-    """Image-to-Video API"""
-    time.sleep(3)
-    return {"url": "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4", "type": "video", "prompt": prompt}
+def call_t2i(prompt, api_key, model, api_url):
+    """文生图 API"""
+    headers = make_headers(api_key)
+    payload = {"model": model, "prompt": prompt, "n":1, "size":"1024x1024"}
+    try:
+        r = requests.post(f"{api_url}/images/generations", headers=headers, json=payload, timeout=120)
+        if r.status_code != 200: return handle_error(r)
+        return {"url": r.json()["data"][0]["url"], "type": "image", "prompt": prompt}
+    except Exception as e:
+        st.error(f"{t('error_network')}: {e}")
+        return None
 
-def call_v2v_api(prompt, video_data, api_key, model, api_url):
-    """Video-to-Video API"""
-    time.sleep(4)
-    return {"url": "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4", "type": "video", "prompt": prompt}
+def submit_task(api_url, api_key, payload, endpoint="/video/generations"):
+    """提交异步任务"""
+    headers = make_headers(api_key)
+    try:
+        r = requests.post(f"{api_url}{endpoint}", headers=headers, json=payload, timeout=60)
+        if r.status_code != 200: return handle_error(r), None
+        data = r.json()
+        return data.get("task_id") or data.get("id"), data
+    except Exception as e:
+        st.error(f"{t('error_network')}: {e}")
+        return None, None
+
+def poll_status(api_url, api_key, task_id, max_att=72, interval=5):
+    """轮询任务状态 - 视频生成核心"""
+    headers = make_headers(api_key)
+    status = st.empty()
+    
+    for i in range(1, max_att+1):
+        status.info(t("polling").format(i, max_att))
+        try:
+            for suf in [f"/tasks/{task_id}", f"/video/generations/{task_id}"]:
+                try:
+                    r = requests.get(f"{api_url}{suf}", headers=headers, timeout=30)
+                    if r.status_code == 200: break
+                except: continue
+            else: continue
+            
+            data = r.json()
+            s = str(data.get("status", data.get("state", ""))).upper()
+            
+            if s in ["SUCCEED", "SUCCESS", "COMPLETED", "DONE"]:
+                for k in ["video_url","output_url","url","video"]:
+                    if k in data:
+                        status.success(t("success"))
+                        return data[k]
+                if data.get("videos"):
+                    status.success(t("success"))
+                    return data["videos"][0].get("video_url", data["videos"][0].get("url"))
+            
+            if s in ["FAILED","ERROR"]:
+                st.error(t("failed") + ": " + str(data.get("error","")))
+                return None
+            
+            time.sleep(interval)
+        except Exception as e:
+            if i <= 3: time.sleep(interval); continue
+            st.error(f"{t('error_network')}: {e}")
+            return None
+    
+    st.error("Timeout")
+    return None
+
+def call_t2v(prompt, api_key, model, api_url):
+    """文生视频"""
+    payload = {"model": model, "input": {"prompt": prompt}, "parameters": {"size":"720p","duration":5}}
+    task_id, _ = submit_task(api_url, api_key, payload)
+    if not task_id: return None
+    st.info(f"{t('task_id')} {task_id}")
+    with st.spinner(t("generating")):
+        url = poll_status(api_url, api_key, task_id)
+    if url: return {"url": url, "type": "video", "prompt": prompt}
+    return None
+
+def call_i2v(prompt, img_data, api_key, model, api_url):
+    """图生视频"""
+    if img_data.startswith("http"):
+        payload = {"model": model, "input": {"prompt": prompt, "img_url": img_data}, "parameters": {"size":"720p","duration":5}}
+    else:
+        payload = {"model": model, "input": {"prompt": prompt, "img_base64": img_data}, "parameters": {"size":"720p","duration":5}}
+    task_id, _ = submit_task(api_url, api_key, payload)
+    if not task_id: return None
+    st.info(f"{t('task_id')} {task_id}")
+    with st.spinner(t("generating")):
+        url = poll_status(api_url, api_key, task_id)
+    if url: return {"url": url, "type": "video", "prompt": prompt}
+    return None
+
+def call_v2v(prompt, vid_data, api_key, model, api_url):
+    """视频生视频"""
+    if vid_data.startswith("http"):
+        payload = {"model": model, "input": {"prompt": prompt, "video_url": vid_data}, "parameters": {"size":"720p","duration":5}}
+    else:
+        payload = {"model": model, "input": {"prompt": prompt, "video_base64": vid_data}, "parameters": {"size":"720p","duration":5}}
+    task_id, _ = submit_task(api_url, api_key, payload)
+    if not task_id: return None
+    st.info(f"{t('task_id')} {task_id}")
+    with st.spinner(t("generating")):
+        url = poll_status(api_url, api_key, task_id)
+    if url: return {"url": url, "type": "video", "prompt": prompt}
+    return None
 
 # ============================================================
-# Main Interface
+# Main UI
 # ============================================================
-
-st.markdown(f'<p class="main-title">🎬 {t("main_title")}</p>', unsafe_allow_html=True)
-st.markdown(f"### {t('main_subtitle')}")
+st.markdown(f"## 🎬 {t('main_title')} | {t('main_subtitle')}")
 st.markdown("---")
 
-# Two Columns
-col_config, col_create = st.columns([1, 2])
+c1, c2 = st.columns([1, 2])
 
-# ============================================================
-# Left: Configuration Panel
-# ============================================================
-with col_config:
+with c1:
     st.header(t("config_title"))
+    st.session_state.global_api_url = st.text_input(t("global_api_url"), st.session_state.global_api_url, placeholder="https://...")
     
-    with st.expander(t("global_settings"), expanded=True):
-        st.session_state.global_api_url = st.text_input(
-            t("global_api_url"), 
-            value=st.session_state.global_api_url, 
-            placeholder=t("global_api_url_placeholder")
-        )
+    for section, (key_prefix, placeholder) in [
+        ("text_model", ("text_api_key", "sk-...")), ("t2i_model", ("t2i_api_key", "sk-...")),
+        ("t2v_model", ("t2v_api_key", "sk-...")), ("i2v_model", ("i2v_api_key", "sk-...")), ("v2v_model", ("v2v_api_key", "sk-..."))
+    ]:
+        with st.expander(t(section)):
+            st.session_state[key_prefix[0]] = st.text_input(t(key_prefix[0]), type="password", placeholder=placeholder)
+            st.session_state[key_prefix[0].replace("_api_key","_model")] = st.text_input(t(key_prefix[0].replace("_api_key","_model")), placeholder=section.split()[0])
     
-    with st.expander(t("text_model")):
-        st.session_state.text_api_key = st.text_input(
-            t("text_api_key"), 
-            value=st.session_state.text_api_key, 
-            type="password", 
-            placeholder=t("text_api_key_placeholder")
-        )
-        st.session_state.text_model = st.text_input(
-            t("text_model_name"), 
-            value=st.session_state.text_model, 
-            placeholder=t("text_model_placeholder")
-        )
-    
-    with st.expander(t("t2i_model")):
-        st.session_state.t2i_api_key = st.text_input(
-            t("t2i_api_key"), 
-            value=st.session_state.t2i_api_key, 
-            type="password", 
-            placeholder=t("t2i_api_key_placeholder")
-        )
-        st.session_state.t2i_model = st.text_input(
-            t("t2i_model_name"), 
-            value=st.session_state.t2i_model, 
-            placeholder=t("t2i_model_placeholder")
-        )
-    
-    with st.expander(t("t2v_model")):
-        st.session_state.t2v_api_key = st.text_input(
-            t("t2v_api_key"), 
-            value=st.session_state.t2v_api_key, 
-            type="password", 
-            placeholder=t("t2v_api_key_placeholder")
-        )
-        st.session_state.t2v_model = st.text_input(
-            t("t2v_model_name"), 
-            value=st.session_state.t2v_model, 
-            placeholder=t("t2v_model_placeholder")
-        )
-    
-    with st.expander(t("i2v_model")):
-        st.session_state.i2v_api_key = st.text_input(
-            t("i2v_api_key"), 
-            value=st.session_state.i2v_api_key, 
-            type="password", 
-            placeholder=t("i2v_api_key_placeholder")
-        )
-        st.session_state.i2v_model = st.text_input(
-            t("i2v_model_name"), 
-            value=st.session_state.i2v_model, 
-            placeholder=t("i2v_model_placeholder")
-        )
-    
-    with st.expander(t("v2v_model")):
-        st.session_state.v2v_api_key = st.text_input(
-            t("v2v_api_key"), 
-            value=st.session_state.v2v_api_key, 
-            type="password", 
-            placeholder=t("v2v_api_key_placeholder")
-        )
-        st.session_state.v2v_model = st.text_input(
-            t("v2v_model_name"), 
-            value=st.session_state.v2v_model, 
-            placeholder=t("v2v_model_placeholder")
-        )
-    
-    if st.button(t("save_config"), use_container_width=True):
-        st.success(t("save_config_success"))
+    if st.button(t("save_config")): st.success(t("save_config_success"))
 
-# ============================================================
-# Right: Creation Panel
-# ============================================================
-with col_create:
+with c2:
     st.header(t("create_title"))
-    
-    # Step 1: Mode Selection
     st.subheader(t("step_1"))
-    mode = st.radio(
-        "Mode", 
-        ["Text-to-Image", "Text-to-Video", "Image-to-Video", "Video-to-Video"], 
-        horizontal=True, 
-        label_visibility="collapsed",
-        format_func=lambda x: {
-            "Text-to-Image": t("mode_t2i"),
-            "Text-to-Video": t("mode_t2v"),
-            "Image-to-Video": t("mode_i2v"),
-            "Video-to-Video": t("mode_v2v")
-        }[x]
-    )
-    st.session_state.generation_mode = mode
+    mode = st.radio("Mode", ["Text-to-Image","Text-to-Video","Image-to-Video","Video-to-Video"], horizontal=True, label_visibility="collapsed",
+                   format_func=lambda x: {"Text-to-Image":t("mode_t2i"),"Text-to-Video":t("mode_t2v"),"Image-to-Video":t("mode_i2v"),"Video-to-Video":t("mode_v2v")}[x])
     
-    # Step 2: Prompt Input
     st.subheader(t("step_2"))
-    prompt = st.text_area(
-        t("prompt_label"), 
-        height=120, 
-        placeholder=t("prompt_placeholder")
-    )
+    prompt = st.text_area(t("prompt_label"), height=100, placeholder=t("prompt_placeholder"))
+    use_opt = st.checkbox(t("use_ai_optimize"))
     
-    # Prompt Optimization
-    use_optimize = st.checkbox(t("use_ai_optimize"))
-    
-    # Step 3: Media Input
-    media_input = None
-    media_url = ""
-    
+    media, media_url = None, ""
     st.subheader(t("step_3"))
-    
     if mode == "Image-to-Video":
-        col_img1, col_img2 = st.columns(2)
-        with col_img1:
-            uploaded_image = st.file_uploader(t("upload_image"), type=['jpg', 'jpeg', 'png', 'webp'])
-        with col_img2:
-            media_url = st.text_input(t("or_image_url"), placeholder=t("image_url_placeholder"))
-        if uploaded_image:
-            import base64
-            media_input = base64.b64encode(uploaded_image.read()).decode()
-    
+        media = st.file_uploader(t("upload_image"), type=['jpg','png'])
+        media_url = st.text_input(t("or_image_url"), placeholder="https://...")
+        if media: media = base64.b64encode(media.read()).decode()
     elif mode == "Video-to-Video":
-        col_vid1, col_vid2 = st.columns(2)
-        with col_vid1:
-            uploaded_video = st.file_uploader(t("upload_video"), type=['mp4', 'mov', 'avi'])
-        with col_vid2:
-            media_url = st.text_input(t("or_video_url"), placeholder=t("video_url_placeholder"))
-        if uploaded_video:
-            import base64
-            media_input = base64.b64encode(uploaded_video.read()).decode()
+        media = st.file_uploader(t("upload_video"), type=['mp4'])
+        media_url = st.text_input(t("or_video_url"), placeholder="https://...")
+        if media: media = base64.b64encode(media.read()).decode()
     
-    # Generate Button
     st.markdown("---")
-    
     if st.button(t("generate"), type="primary", use_container_width=True):
-        # Basic Validation
-        if not prompt:
-            st.error(t("error_no_prompt"))
-            st.stop()
+        if not prompt: st.error(t("error_no_prompt")); st.stop()
         
-        final_prompt = prompt
+        fp = prompt
+        if use_opt:
+            if not st.session_state.text_api_key or not st.session_state.text_model: st.error(t("error_text_api")); st.stop()
+            with st.spinner(t("optimize_title")): fp = call_text(prompt, st.session_state.text_api_key, st.session_state.text_model, st.session_state.global_api_url)
+            if fp: st.success(t("optimize_success")); st.info(f"{t('enhanced')} {fp}")
+            else: st.stop()
         
-        # Prompt Optimization
-        if use_optimize:
-            if not st.session_state.text_api_key or not st.session_state.text_model:
-                st.error(t("error_text_api"))
-                st.stop()
-            
-            with st.spinner(t("optimize_title")):
-                final_prompt = call_text_api(prompt, st.session_state.text_api_key, st.session_state.text_model, st.session_state.global_api_url)
-            
-            st.success(t("optimize_success"))
-            st.info(f"{t('enhanced_prompt')} {final_prompt}")
+        cfg = {
+            "Text-to-Image": ("t2i", st.session_state.t2i_api_key, st.session_state.t2i_model, call_t2i),
+            "Text-to-Video": ("t2v", st.session_state.t2v_api_key, st.session_state.t2v_model, call_t2v),
+            "Image-to-Video": ("i2v", st.session_state.i2v_api_key, st.session_state.i2v_model, call_i2v, media or media_url),
+            "Video-to-Video": ("v2v", st.session_state.v2v_api_key, st.session_state.v2v_model, call_v2v, media or media_url),
+        }
         
-        # Mode-specific Validation
-        if mode == "Text-to-Image" and (not st.session_state.t2i_api_key or not st.session_state.t2i_model):
-            st.error(t("error_t2i_api"))
-            st.stop()
-        elif mode == "Text-to-Video" and (not st.session_state.t2v_api_key or not st.session_state.t2v_model):
-            st.error(t("error_t2v_api"))
-            st.stop()
-        elif mode == "Image-to-Video" and (not st.session_state.i2v_api_key or not st.session_state.i2v_model):
-            st.error(t("error_i2v_api"))
-            st.stop()
-        elif mode == "Image-to-Video" and not media_input and not media_url:
-            st.error(t("error_i2v_media"))
-            st.stop()
-        elif mode == "Video-to-Video" and (not st.session_state.v2v_api_key or not st.session_state.v2v_model):
-            st.error(t("error_v2v_api"))
-            st.stop()
-        elif mode == "Video-to-Video" and not media_input and not media_url:
-            st.error(t("error_v2v_media"))
-            st.stop()
+        p = cfg[mode]
+        if not p[1] or not p[2]:
+            st.error(t(f"error_{p[0]}_api")); st.stop()
+        if mode in ["Image-to-Video","Video-to-Video"] and not p[4]:
+            st.error(t(f"error_{p[0]}_media")); st.stop()
         
-        # Generate
         with st.spinner(t("generating")):
-            result = None
-            if mode == "Text-to-Image":
-                result = call_t2i_api(final_prompt, st.session_state.t2i_api_key, st.session_state.t2i_model, st.session_state.global_api_url)
-            elif mode == "Text-to-Video":
-                result = call_t2v_api(final_prompt, st.session_state.t2v_api_key, st.session_state.t2v_model, st.session_state.global_api_url)
-            elif mode == "Image-to-Video":
-                result = call_i2v_api(final_prompt, media_input or media_url, st.session_state.i2v_api_key, st.session_state.i2v_model, st.session_state.global_api_url)
-            elif mode == "Video-to-Video":
-                result = call_v2v_api(final_prompt, media_input or media_url, st.session_state.v2v_api_key, st.session_state.v2v_model, st.session_state.global_api_url)
-        
-        # Display Result
-        st.markdown("---")
-        st.subheader(t("result_title"))
+            if mode == "Text-to-Image": result = p[3](fp, p[1], p[2], st.session_state.global_api_url)
+            elif mode == "Text-to-Video": result = p[3](fp, p[1], p[2], st.session_state.global_api_url)
+            else: result = p[3](fp, p[4], p[1], p[2], st.session_state.global_api_url)
         
         if result:
-            if result["type"] == "image":
-                st.image(result["url"], caption=t("result_image"))
-            elif result["type"] == "video":
-                st.video(result["url"])
-            
-            # Download
-            prompt_json = json.dumps({
-                "prompt": result.get("prompt", final_prompt),
-                "mode": mode,
-                "timestamp": datetime.now().isoformat()
-            }, ensure_ascii=False, indent=2)
-            
-            st.download_button(t("download_prompt"), prompt_json, "openlens_prompt.json", "application/json")
+            st.markdown("---")
+            st.subheader(t("result_title"))
+            if result["type"]=="image": st.image(result["url"])
+            else: st.video(result["url"])
+            d = json.dumps({"prompt":result.get("prompt",fp),"mode":mode,"time":datetime.now().isoformat()}, ensure_ascii=False)
+            st.download_button(t("download"), d, "prompt.json", "application/json")
 
-# ============================================================
-# Footer
-# ============================================================
 st.markdown("---")
-st.markdown(f"""
-<div style='text-align: center; color: #666; font-size: 12px;'>
-    <p>🎬 {t('footer_title')}</p>
-    <p><strong>{t('footer_disclaimer')}</strong></p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(f"<div style='text-align:center;color:#666;font-size:12px'>{t('footer_title')} | {t('footer_disclaimer')}</div>", unsafe_allow_html=True)
