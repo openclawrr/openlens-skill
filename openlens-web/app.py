@@ -49,6 +49,12 @@ LANG = {
         "enhancing": "Enhancing prompt…",
         "upload_image": "Upload source image",
         "upload_video": "Upload source video",
+        "source_type_label": "Source Type",
+        "upload_file_option": "Upload Image File",
+        "provide_url_option": "Provide Image URL",
+        "image_url_label": "Image URL",
+        "image_url_placeholder": "https://example.com/image.jpg",
+        "no_upload_support": "This API only supports Image URLs or Base64 data. Please provide a direct link to an image instead of uploading a file.",
         "resolution_label": "Resolution",
         "duration_label": "Duration (seconds)",
         "steps_label": "Steps (T2I)",
@@ -94,6 +100,12 @@ LANG = {
         "enhancing": "正在增强提示词…",
         "upload_image": "上传源图像",
         "upload_video": "上传源视频",
+        "source_type_label": "来源类型",
+        "upload_file_option": "上传图像文件",
+        "provide_url_option": "提供图像URL",
+        "image_url_label": "图像URL",
+        "image_url_placeholder": "https://example.com/image.jpg",
+        "no_upload_support": "此API仅支持图像URL或Base64数据。请提供图像的直链，而不是上传文件。",
         "resolution_label": "分辨率",
         "duration_label": "时长（秒）",
         "steps_label": "推理步数 (T2I)",
@@ -139,6 +151,12 @@ LANG = {
         "enhancing": "プロンプトを強化中…",
         "upload_image": "ソース画像をアップロード",
         "upload_video": "ソース動画をアップロード",
+        "source_type_label": "ソースタイプ",
+        "upload_file_option": "画像ファイルをアップロード",
+        "provide_url_option": "画像URLを提供",
+        "image_url_label": "画像URL",
+        "image_url_placeholder": "https://example.com/image.jpg",
+        "no_upload_support": "このAPIは画像URLまたはBase64データのみサポートしています。ファイルのアップロードではなく、画像への直接リンクを提供してください。",
         "resolution_label": "解像度",
         "duration_label": "長さ（秒）",
         "steps_label": "ステップ数 (T2I)",
@@ -276,37 +294,108 @@ def generate_image(base_url: str, api_key: str, model: str,
     return requests.get(image_url, timeout=60).content
 
 
+def upload_file_to_api(base_url: str, api_key: str, file_bytes: bytes, 
+                        filename: str, file_type: str) -> str:
+    """
+    Upload a file to API and return the public URL.
+    Returns empty string if API doesn't support file upload.
+    """
+    headers = {"Authorization": f"Bearer {api_key}"}
+    
+    # Try different upload endpoints
+    upload_endpoints = [
+        f"{base_url.rstrip('/')}/v1/files",
+        f"{base_url.rstrip('/')}/v1/upload",
+        f"{base_url.rstrip('/')}/v1/files/upload",
+    ]
+    
+    for endpoint in upload_endpoints:
+        try:
+            files = {"file": (filename, file_bytes, file_type)}
+            resp = requests.post(endpoint, headers=headers, files=files, timeout=30)
+            if resp.status_code == 200:
+                data = resp.json()
+                # Try to extract URL from response
+                url = (data.get("url") or 
+                       data.get("data", {}).get("url") or
+                       data.get("data", {}).get("file_url") or
+                       data.get("file_url"))
+                if url:
+                    return url
+        except Exception:
+            continue
+    
+    return ""  # No upload endpoint available
+
+
 def submit_video_task(base_url: str, api_key: str, model: str,
                       prompt: str, resolution: str, duration: int,
                       image_bytes: bytes | None = None,
-                      video_bytes: bytes | None = None) -> str:
+                      video_bytes: bytes | None = None,
+                      image_url: str | None = None,
+                      lang_dict: dict | None = None) -> str:
     """Submit a video generation task and return the task_id."""
     url = f"{base_url.rstrip('/')}/video/generations"
-    w, h = resolution.split("x")
+    
+    # Build payload according to API schema
+    # I2V/V2V: needs "input" object with "prompt" and "img_url"
+    # T2V: needs "input" object with only "prompt"
+    input_obj: dict = {"prompt": prompt}
+    
+    # Add image URL if provided
+    img_final_data = None
+    
+    if image_url:
+        # User provided a direct URL
+        img_final_data = image_url
+    elif image_bytes:
+        # Convert image bytes to Base64 (API supports Base64 format)
+        import base64
+        from PIL import Image
+        from io import BytesIO
+        
+        try:
+            # Try to detect image format
+            image = Image.open(BytesIO(image_bytes))
+            format_lower = image.format.lower() if image.format else "jpeg"
+            mime_type = f"image/{format_lower}"
+            if format_lower == "jpg":
+                mime_type = "image/jpeg"
+            
+            # Encode to Base64
+            base64_data = base64.b64encode(image_bytes).decode('utf-8')
+            img_final_data = f"data:{mime_type};base64,{base64_data}"
+        except Exception as e:
+            # Fallback: try to upload to API if Base64 fails
+            uploaded_url = upload_file_to_api(
+                base_url, api_key, image_bytes, 
+                "source.jpg", "image/jpeg"
+            )
+            if uploaded_url:
+                img_final_data = uploaded_url
+            else:
+                # API doesn't support file upload
+                error_msg = lang_dict.get("no_upload_support", "This API only supports Image URLs or Base64 data. Please provide a direct link to an image instead of uploading a file.") if lang_dict else "This API only supports Image URLs or Base64 data. Please provide a direct link to an image instead of uploading a file."
+                raise ValueError(error_msg)
+    
+    if img_final_data:
+        input_obj["img_url"] = img_final_data
+    
+    # Build final payload
     payload: dict = {
         "model": model,
-        "prompt": prompt,
-        "duration": duration,
-        "width": int(w),
-        "height": int(h),
+        "input": input_obj,
     }
-    files = None
-    headers = {"Authorization": f"Bearer {api_key}"}
-
-    if image_bytes:
-        # Multipart upload for I2V
-        files = {"image": ("source.jpg", image_bytes, "image/jpeg")}
-        del payload["model"]  # some APIs separate model via form field
-        data = {**payload, "model": model}
-        resp = requests.post(url, headers=headers, data=data, files=files, timeout=60)
-    elif video_bytes:
-        files = {"video": ("source.mp4", video_bytes, "video/mp4")}
-        data = {**payload, "model": model}
-        resp = requests.post(url, headers=headers, data=data, files=files, timeout=60)
-    else:
-        resp = requests.post(url, headers=_headers(api_key), json=payload, timeout=60)
-
+    
+    # For T2V (no image), we still need to send input with prompt
+    if not img_final_data and not video_bytes:
+        # T2V task - already has input with prompt
+        pass
+    
+    # Send request
+    resp = requests.post(url, headers=_headers(api_key), json=payload, timeout=60)
     resp.raise_for_status()
+    
     body = resp.json()
     # Support both {id:...} and {task_id:...} response shapes
     return body.get("id") or body.get("task_id") or body["data"]["id"]
@@ -486,12 +575,30 @@ with col_workspace:
     # Dynamic file uploader
     uploaded_image = None
     uploaded_video = None
+    image_url_input = None
+    
     if task_key == "I2V":
-        uploaded_image = st.file_uploader(
-            T["upload_image"],
-            type=["jpg", "jpeg", "png", "webp"],
-            key="i2v_image_uploader",
+        # Let user choose between URL or file upload
+        input_method = st.radio(
+            T["source_type_label"],
+            [T["upload_file_option"], T["provide_url_option"]],
+            key="i2v_input_method",
+            horizontal=True
         )
+        
+        if input_method == T["upload_file_option"]:
+            uploaded_image = st.file_uploader(
+                T["upload_image"],
+                type=["jpg", "jpeg", "png", "webp"],
+                key="i2v_image_uploader",
+            )
+        else:
+            image_url_input = st.text_input(
+                T["image_url_label"],
+                placeholder=T["image_url_placeholder"],
+                key="i2v_url_input",
+            )
+            
     elif task_key == "V2V":
         uploaded_video = st.file_uploader(
             T["upload_video"],
@@ -512,7 +619,7 @@ with col_workspace:
         if not prompt:
             st.warning(T["warn_prompt"])
             st.stop()
-        if task_key == "I2V" and not uploaded_image:
+        if task_key == "I2V" and not uploaded_image and not image_url_input:
             st.warning(T["warn_upload"])
             st.stop()
         if task_key == "V2V" and not uploaded_video:
@@ -539,6 +646,7 @@ with col_workspace:
                 # ── Video tasks ──────────────────────────────
                 img_bytes_src = uploaded_image.read() if uploaded_image else None
                 vid_bytes_src = uploaded_video.read() if uploaded_video else None
+                img_url_src = image_url_input if image_url_input else None
 
                 with st.spinner(T["generating_text"]):
                     task_id = submit_video_task(
@@ -546,6 +654,8 @@ with col_workspace:
                         prompt, vid_resolution, duration,
                         image_bytes=img_bytes_src,
                         video_bytes=vid_bytes_src,
+                        image_url=img_url_src,
+                        lang_dict=T,
                     )
 
                 vid_bytes = poll_video_task(
