@@ -58,10 +58,10 @@ Edit `config.json` or use the GUI to set your API credentials:
 
 ```json
 {
-    "video_api_url": "https://api.onlypixai.com/v1",
-    "video_api_key": "sk-px-...",
-    "text_api_url": "https://api.openai.com/v1",
-    "text_api_key": "sk-...",
+    "video_api_url": "YOUR_VIDEO_API_URL",
+    "video_api_key": "YOUR_VIDEO_API_KEY",
+    "text_api_url": "YOUR_TEXT_API_URL",
+    "text_api_key": "YOUR_TEXT_API_KEY",
     "text_model": "gpt-4o",
     "default_save_path": "./outputs"
 }

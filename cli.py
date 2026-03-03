@@ -16,6 +16,7 @@ from tqdm import tqdm
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SKILL_DIR, "config.json")
 DEFAULT_SAVE_PATH = "./outputs"
+DEFAULT_MODEL = "wan2.2"
 
 # ============================================================
 # CONFIGURATION
@@ -98,8 +99,8 @@ def submit_video_task(api_url, api_key, prompt, image_url=None, resolution="720p
     }
     
     # Use custom model or default
-    if model is None:
-        model = "video/wan2.6-i2v" if image_url else "video/wan2.6-t2v"
+    if model is None or model == "":
+        model = DEFAULT_MODEL
     
     payload = {
         "model": model,
@@ -176,7 +177,7 @@ def main():
     parser = argparse.ArgumentParser(description="OpenLens CLI - AI Video Generation")
     parser.add_argument("--prompt", "-p", required=True, help="Video description prompt")
     parser.add_argument("--image_url", "-i", default="", help="Image URL for I2V")
-    parser.add_argument("--model", "-m", default="", help="Video model ID (e.g., video/wan2.6-i2v, seedance1.5, wan2.2-t2v)")
+    parser.add_argument("--model", "-m", default="", help="Video model ID (e.g., wan2.2, seedance1.5, wan2.6-i2v)")
     parser.add_argument("--output", "-o", default="", help="Output file path")
     parser.add_argument("--refine", "-r", action="store_true", help="Enable prompt refinement")
     parser.add_argument("--resolution", default="720p", help="Video resolution (720p, 1080p)")
@@ -227,11 +228,11 @@ def main():
     log_msg("Submitting video generation task...")
     image_url = args.image_url if args.image_url else None
     
-    # Determine model - use custom if provided, otherwise auto-detect
+    # Determine model - use custom if provided, otherwise use default
     if args.model:
         video_model = args.model
     else:
-        video_model = "video/wan2.6-i2v" if image_url else "video/wan2.6-t2v"
+        video_model = DEFAULT_MODEL
     
     log_msg(f"Using model: {video_model}")
     task_id, status = submit_video_task(video_api_url, video_api_key, final_prompt, image_url, args.resolution, args.duration, video_model)
