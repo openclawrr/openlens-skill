@@ -101,25 +101,15 @@ if 'refined_prompt' not in st.session_state:
 if 'save_path' not in st.session_state:
     st.session_state.save_path = "./outputs"
 
-# Load default config
-_config = load_config()
-if _config:
-    if not st.session_state.api_url and _config.get("video_api_url"):
-        st.session_state.api_url = _config.get("video_api_url", "")
-    if not st.session_state.api_key and _config.get("video_api_key"):
-        st.session_state.api_key = _config.get("video_api_key", "")
-    if not st.session_state.text_api_url and _config.get("text_api_url"):
-        st.session_state.text_api_url = _config.get("text_api_url", "")
-    if not st.session_state.text_api_key and _config.get("text_api_key"):
-        st.session_state.text_api_key = _config.get("text_api_key", "")
-    if not st.session_state.text_model and _config.get("text_model"):
-        st.session_state.text_model = _config.get("text_model", "")
-    if not st.session_state.save_path and _config.get("default_save_path"):
-        st.session_state.save_path = _config.get("default_save_path", "./outputs")
+# NOTE: Config loading removed to prevent exposing API keys
+# Users must enter their own API keys in the GUI
 
 # ============================================================
-# HELPER FUNCTIONS
-# ============================================================
+# HELPER F===========================
+
+# DefaultUNCTIONS
+# ================================= video model
+DEFAULT_MODEL = "wan2.2"
 
 REFINER_SYSTEM_PROMPT = """You are a top-tier AI video director. Transform the user's description into a professional, cinematic video prompt. Enhance with visual details, motion dynamics, technical quality terms. Output ONLY the refined prompt."""
 
@@ -168,7 +158,7 @@ def upload_to_catbox(file_data, filename):
 
 def submit_video_task(api_url, api_key, prompt, negative_prompt, resolution="720p", duration=5, **extra_params):
     headers = {"Authorization": "Bearer " + api_key, "Content-Type": "application/json"}
-    payload = {"model": extra_params.get("model", "video/wan2.6-i2v"), "input": {"prompt": prompt}}
+    payload = {"model": extra_params.get("model", DEFAULT_MODEL), "input": {"prompt": prompt}}
     
     if negative_prompt:
         payload["input"]["negative_prompt"] = negative_prompt
@@ -346,15 +336,15 @@ with col1:
     with col_model1:
         model = st.text_input(
             "Video Model",
-            value="video/wan2.6-i2v",
-            placeholder="video/wan2.6-i2v, seedance1.5, wan2.2-t2v, etc.",
-            help="Enter your video model ID (e.g., video/wan2.6-i2v, seedance1.5, wan2.2-t2v)"
+            value=DEFAULT_MODEL,
+            placeholder="wan2.2, seedance1.5, wan2.6-i2v, etc.",
+            help="Enter your video model ID (e.g., wan2.2, seedance1.5, wan2.6-i2v, etc.)"
         )
     with col_model2:
         # Quick presets
         preset = st.selectbox(
             "Presets",
-            ["Custom", "wan2.6-i2v", "wan2.6-t2v", "wan2.6-v2v", "seedance1.5"],
+            ["Custom", "wan2.2", "wan2.6-i2v", "wan2.6-t2v", "seedance1.5"],
             index=1,
             help="Quick select common models"
         )
@@ -377,7 +367,7 @@ with col1:
             st.error("❌ Please enter a prompt")
         else:
             with st.spinner("Optimizing..."):
-                img_url = st.session_state.uploaded_image_url if model == "video/wan2.6-i2v" else None
+                img_url = st.session_state.uploaded_image_url if st.session_state.uploaded_image_url else None
                 refined = refine_prompt(st.session_state.text_api_url, st.session_state.text_api_key, st.session_state.text_model, prompt, img_url)
                 if refined:
                     st.session_state.refined_prompt = refined
@@ -398,7 +388,7 @@ with col1:
     
     # Image upload for I2V
     img_url = ""
-    if model == "video/wan2.6-i2v":
+    if model and "i2v" in model.lower():
         st.markdown("#### 🖼️ Image Input")
         uploaded_file = st.file_uploader("Upload image", type=['jpg', 'jpeg', 'png', 'webp'])
         
@@ -444,7 +434,7 @@ if generate_btn:
         st.error("❌ Please enter a prompt")
     else:
         final_prompt = prompt
-        current_img_url = img_url if model == "video/wan2.6-i2v" and img_url else None
+        current_img_url = img_url if (model and "i2v" in model.lower()) and img_url else None
         
         # Auto refine
         if auto_refine and st.session_state.text_api_url and st.session_state.text_api_key and st.session_state.text_model:
