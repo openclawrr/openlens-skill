@@ -1,6 +1,6 @@
 {
   "name": "openlens-skill",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "OpenLens - AI Video Generation Portal with Raw Transparency. Bypass safety filters using private APIs.",
   "author": "OpenClaw Community",
   "license": "MIT",

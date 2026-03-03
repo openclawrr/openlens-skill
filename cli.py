@@ -90,15 +90,19 @@ def refine_prompt(api_url, api_key, model, user_prompt, image_url=None):
     
     return None
 
-def submit_video_task(api_url, api_key, prompt, image_url=None, resolution="720p", duration=5):
+def submit_video_task(api_url, api_key, prompt, image_url=None, resolution="720p", duration=5, model=None):
     """Submit video generation task"""
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
+    # Use custom model or default
+    if model is None:
+        model = "video/wan2.6-i2v" if image_url else "video/wan2.6-t2v"
+    
     payload = {
-        "model": "video/wan2.6-i2v" if image_url else "video/wan2.6-t2v",
+        "model": model,
         "input": {"prompt": prompt},
         "parameters": {"size": resolution, "duration": duration}
     }
@@ -172,6 +176,7 @@ def main():
     parser = argparse.ArgumentParser(description="OpenLens CLI - AI Video Generation")
     parser.add_argument("--prompt", "-p", required=True, help="Video description prompt")
     parser.add_argument("--image_url", "-i", default="", help="Image URL for I2V")
+    parser.add_argument("--model", "-m", default="", help="Video model ID (e.g., video/wan2.6-i2v, seedance1.5, wan2.2-t2v)")
     parser.add_argument("--output", "-o", default="", help="Output file path")
     parser.add_argument("--refine", "-r", action="store_true", help="Enable prompt refinement")
     parser.add_argument("--resolution", default="720p", help="Video resolution (720p, 1080p)")
@@ -221,7 +226,15 @@ def main():
     # Step 2: Submit video task
     log_msg("Submitting video generation task...")
     image_url = args.image_url if args.image_url else None
-    task_id, status = submit_video_task(video_api_url, video_api_key, final_prompt, image_url, args.resolution, args.duration)
+    
+    # Determine model - use custom if provided, otherwise auto-detect
+    if args.model:
+        video_model = args.model
+    else:
+        video_model = "video/wan2.6-i2v" if image_url else "video/wan2.6-t2v"
+    
+    log_msg(f"Using model: {video_model}")
+    task_id, status = submit_video_task(video_api_url, video_api_key, final_prompt, image_url, args.resolution, args.duration, video_model)
     
     if not task_id:
         log_msg("Failed to submit task")
