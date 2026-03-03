@@ -97,26 +97,45 @@ def _build_t2i_payload(model_id: str, prompt: str,
 
 def _build_t2v_payload(model_id: str, prompt: str,
                         resolution: str, duration: int, fps: int) -> dict:
-    w, h = ASPECT_MAP.get(resolution, (1280, 720))
+    """Build payload for T2V API call (OnlyPix format)."""
+    # Map aspect ratio to API-supported resolution strings
+    RES_MAP = {
+        "16:9": "720p",       # 1280*720
+        "9:16": "720*1280",
+        "1:1": "960*960",
+        "4:3": "1024*768",
+        "21:9": "1920*816",
+    }
+    size = RES_MAP.get(resolution, "720p")
     return {
-        "model"     : model_id,
-        "prompt"    : prompt,
-        "duration"  : duration,
-        "width"     : w,
-        "height"    : h,
-        "fps"       : fps,
+        "model": model_id,
+        "input": {"prompt": prompt},
+        "parameters": {
+            "size": size,
+            "duration": duration,
+            "fps": fps,
+        },
     }
 
 
 def _build_i2v_payload(model_id: str, prompt: str,
                         resolution: str, duration: int) -> dict:
-    w, h = ASPECT_MAP.get(resolution, (1280, 720))
+    """Build payload for I2V/V2V API call (OnlyPix format)."""
+    RES_MAP = {
+        "16:9": "720p",
+        "9:16": "720*1280",
+        "1:1": "960*960",
+        "4:3": "1024*768",
+        "21:9": "1920*816",
+    }
+    size = RES_MAP.get(resolution, "720p")
     return {
-        "model"    : model_id,
-        "prompt"   : prompt,
-        "duration" : duration,
-        "width"    : w,
-        "height"   : h,
+        "model": model_id,
+        "input": {"prompt": prompt},
+        "parameters": {
+            "size": size,
+            "duration": duration,
+        },
     }
 
 
