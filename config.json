@@ -1,0 +1,8 @@
+{
+    "video_api_url": "https://api.onlypixai.com/v1",
+    "video_api_key": "sk-px-YOUR_VIDEO_API_KEY",
+    "text_api_url": "https://api.openai.com/v1",
+    "text_api_key": "sk-YOUR_TEXT_API_KEY",
+    "text_model": "gpt-4o",
+    "default_save_path": "./outputs"
+}
