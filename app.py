@@ -168,11 +168,11 @@ if not st.session_state.age_verified:
     st.markdown(f"<div class='age-box'><div class='age-title'>🎬 {t('age_title')}</div><div style='color:#aaa;margin-bottom:15px'>{t('age_subtitle')}</div><div class='age-check'>✅ {t('age_check_1')}<br>✅ {t('age_check_2')}<br>✅ {t('age_check_3')}</div><div style='color:#ef4444;font-size:12px;margin-top:15px'>{t('age_warning')}</div></div>", unsafe_allow_html=True)
     col1, col2 = st.columns([2,1])
     with col1:
-        if st.button(t("age_enter"), type="primary"):
+        if st.button(t("age_enter"), type="primary", key="age_enter_btn"):
             st.session_state.age_verified = True
             st.rerun()
     with col2:
-        if st.button(t("age_exit")):
+        if st.button(t("age_exit"), key="age_exit_btn"):
             st.markdown("<script>window.parent.location.href='https://www.google.com';</script>", unsafe_allow_html=True)
     st.stop()
 
@@ -342,41 +342,127 @@ c1, c2 = st.columns([1, 2])
 
 with c1:
     st.header(t("config_title"))
-    st.session_state.global_api_url = st.text_input(t("global_api_url"), st.session_state.global_api_url, placeholder="https://...")
+    st.session_state.global_api_url = st.text_input(
+        t("global_api_url"), 
+        st.session_state.global_api_url, 
+        placeholder="https://...", 
+        key="global_api_url_input",
+        label_visibility="visible"
+    )
     
-    for section, (key_prefix, placeholder) in [
-        ("text_model", ("text_api_key", "sk-...")), ("t2i_model", ("t2i_api_key", "sk-...")),
-        ("t2v_model", ("t2v_api_key", "sk-...")), ("i2v_model", ("i2v_api_key", "sk-...")), ("v2v_model", ("v2v_api_key", "sk-..."))
-    ]:
-        with st.expander(t(section)):
-            st.session_state[key_prefix[0]] = st.text_input(t(key_prefix[0]), type="password", placeholder=placeholder)
-            st.session_state[key_prefix[0].replace("_api_key","_model")] = st.text_input(t(key_prefix[0].replace("_api_key","_model")), placeholder=section.split()[0])
+    # 文本模型配置
+    with st.expander(t("text_model")):
+        st.session_state.text_api_key = st.text_input(
+            "Text API Key", 
+            type="password", 
+            placeholder="sk-...",
+            key="text_api_key_input",
+            label_visibility="visible"
+        )
+        st.session_state.text_model = st.text_input(
+            "Text Model Name", 
+            placeholder="gpt-4o",
+            key="text_model_input",
+            label_visibility="visible"
+        )
     
-    if st.button(t("save_config")): st.success(t("save_config_success"))
+    # T2I 配置
+    with st.expander(t("t2i_model")):
+        st.session_state.t2i_api_key = st.text_input(
+            "T2I API Key", 
+            type="password", 
+            placeholder="sk-...",
+            key="t2i_api_key_input",
+            label_visibility="visible"
+        )
+        st.session_state.t2i_model = st.text_input(
+            "T2I Model Name", 
+            placeholder="dall-e-3",
+            key="t2i_model_input",
+            label_visibility="visible"
+        )
+    
+    # T2V 配置
+    with st.expander(t("t2v_model")):
+        st.session_state.t2v_api_key = st.text_input(
+            "T2V API Key", 
+            type="password", 
+            placeholder="sk-...",
+            key="t2v_api_key_input",
+            label_visibility="visible"
+        )
+        st.session_state.t2v_model = st.text_input(
+            "T2V Model Name", 
+            placeholder="wan2.2",
+            key="t2v_model_input",
+            label_visibility="visible"
+        )
+    
+    # I2V 配置
+    with st.expander(t("i2v_model")):
+        st.session_state.i2v_api_key = st.text_input(
+            "I2V API Key", 
+            type="password", 
+            placeholder="sk-...",
+            key="i2v_api_key_input",
+            label_visibility="visible"
+        )
+        st.session_state.i2v_model = st.text_input(
+            "I2V Model Name", 
+            placeholder="wan2.2",
+            key="i2v_model_input",
+            label_visibility="visible"
+        )
+    
+    # V2V 配置
+    with st.expander(t("v2v_model")):
+        st.session_state.v2v_api_key = st.text_input(
+            "V2V API Key", 
+            type="password", 
+            placeholder="sk-...",
+            key="v2v_api_key_input",
+            label_visibility="visible"
+        )
+        st.session_state.v2v_model = st.text_input(
+            "V2V Model Name", 
+            placeholder="wan2.2",
+            key="v2v_model_input",
+            label_visibility="visible"
+        )
+    
+    if st.button(t("save_config"), key="save_config_btn"): 
+        st.success(t("save_config_success"))
 
 with c2:
     st.header(t("create_title"))
     st.subheader(t("step_1"))
-    mode = st.radio("Mode", ["Text-to-Image","Text-to-Video","Image-to-Video","Video-to-Video"], horizontal=True, label_visibility="collapsed",
-                   format_func=lambda x: {"Text-to-Image":t("mode_t2i"),"Text-to-Video":t("mode_t2v"),"Image-to-Video":t("mode_i2v"),"Video-to-Video":t("mode_v2v")}[x])
+    mode = st.radio(
+        "Mode", 
+        ["Text-to-Image","Text-to-Video","Image-to-Video","Video-to-Video"], 
+        horizontal=True, 
+        label_visibility="collapsed",
+        key="mode_radio",
+        format_func=lambda x: {"Text-to-Image":t("mode_t2i"),"Text-to-Video":t("mode_t2v"),"Image-to-Video":t("mode_i2v"),"Video-to-Video":t("mode_v2v")}[x]
+    )
     
     st.subheader(t("step_2"))
-    prompt = st.text_area(t("prompt_label"), height=100, placeholder=t("prompt_placeholder"))
-    use_opt = st.checkbox(t("use_ai_optimize"))
+    prompt = st.text_area(t("prompt_label"), height=100, placeholder=t("prompt_placeholder"), key="prompt_input")
+    
+    use_opt = st.checkbox(t("use_ai_optimize"), key="optimize_checkbox")
     
     media, media_url = None, ""
     st.subheader(t("step_3"))
     if mode == "Image-to-Video":
-        media = st.file_uploader(t("upload_image"), type=['jpg','png'])
-        media_url = st.text_input(t("or_image_url"), placeholder="https://...")
+        media = st.file_uploader(t("upload_image"), type=['jpg','png'], key="image_uploader")
+        media_url = st.text_input(t("or_image_url"), placeholder="https://...", key="image_url_input")
         if media: media = base64.b64encode(media.read()).decode()
     elif mode == "Video-to-Video":
-        media = st.file_uploader(t("upload_video"), type=['mp4'])
-        media_url = st.text_input(t("or_video_url"), placeholder="https://...")
+        media = st.file_uploader(t("upload_video"), type=['mp4'], key="video_uploader")
+        media_url = st.text_input(t("or_video_url"), placeholder="https://...", key="video_url_input")
         if media: media = base64.b64encode(media.read()).decode()
     
     st.markdown("---")
-    if st.button(t("generate"), type="primary", use_container_width=True):
+    if st.button(t("generate"), type="primary", use_container_width=True, key="generate_btn"):
         if not prompt: st.error(t("error_no_prompt")); st.stop()
         
         fp = prompt
