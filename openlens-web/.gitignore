@@ -1,0 +1,11 @@
+# 私有配置
+.env
+.env.*
+secrets.toml
+.streamlit/secrets.toml
+
+# 生成文件
+outputs/
+__pycache__/
+*.py[cod]
+.DS_Store
