@@ -1,0 +1,62 @@
+{
+  "name": "openlens-skill",
+  "version": "1.0.0",
+  "description": "OpenLens - AI Video Generation Portal with Raw Transparency. Bypass safety filters using private APIs.",
+  "author": "OpenClaw Community",
+  "license": "MIT",
+  "homepage": "https://github.com/openclaw/openlens-skill",
+  "tags": ["video", "ai", "generation", "wan", "streamlit"],
+  "platform": ["darwin", "linux"],
+  
+  "config_schema": {
+    "text_api_url": {
+      "type": "string",
+      "default": "",
+      "description": "Text/LLM API Base URL (e.g., https://api.openai.com/v1)"
+    },
+    "text_api_key": {
+      "type": "string",
+      "default": "",
+      "description": "API Key for text/chat generation"
+    },
+    "text_model": {
+      "type": "string",
+      "default": "",
+      "description": "Text model ID (e.g., gpt-4o, deepseek/deepseek-v3)"
+    },
+    "video_api_url": {
+      "type": "string",
+      "default": "",
+      "description": "Video Generation API Base URL (e.g., https://api.onlypixai.com/v1)"
+    },
+    "video_api_key": {
+      "type": "string",
+      "default": "",
+      "description": "API Key for video generation"
+    },
+    "default_save_path": {
+      "type": "string",
+      "default": "./outputs",
+      "description": "Default local path to save generated videos"
+    }
+  },
+  
+  "entrypoint": {
+    "gui": "streamlit run app.py",
+    "cli": "python3 cli.py"
+  },
+  
+  "dependencies": {
+    "streamlit": ">=1.28.0",
+    "requests": ">=2.31.0",
+    "tqdm": ">=4.66.0"
+  },
+  
+  "features": [
+    "Raw transparency - no content filtering",
+    "Prompt refinement with LLM",
+    "Image-to-Video generation",
+    "CLI and GUI modes",
+    "Auto-download to local path"
+  ]
+}
