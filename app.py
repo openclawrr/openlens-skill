@@ -341,7 +341,25 @@ col1, col2 = st.columns([2, 1])
 with col1:
     st.header("📝 Generate Video")
     
-    model = st.selectbox("Model", ["video/wan2.6-i2v", "video/wan2.6-t2v", "video/wan2.6-v2v"])
+    # Model selection - allow custom input
+    col_model1, col_model2 = st.columns([2, 1])
+    with col_model1:
+        model = st.text_input(
+            "Video Model",
+            value="video/wan2.6-i2v",
+            placeholder="video/wan2.6-i2v, seedance1.5, wan2.2-t2v, etc.",
+            help="Enter your video model ID (e.g., video/wan2.6-i2v, seedance1.5, wan2.2-t2v)"
+        )
+    with col_model2:
+        # Quick presets
+        preset = st.selectbox(
+            "Presets",
+            ["Custom", "wan2.6-i2v", "wan2.6-t2v", "wan2.6-v2v", "seedance1.5"],
+            index=1,
+            help="Quick select common models"
+        )
+        if preset != "Custom":
+            model = f"video/{preset}" if not preset.startswith("video/") else preset
     
     prompt = st.text_area("Prompt", height=120, value=st.session_state.refined_prompt or "", placeholder="Describe the video...")
     
